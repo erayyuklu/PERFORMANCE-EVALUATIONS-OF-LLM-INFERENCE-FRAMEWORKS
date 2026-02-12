@@ -1,4 +1,4 @@
-# 📝 Meeting Notes: LLM Inference Performance
+# Meeting Notes - Week 0
 
 **Project Title:** Performance Evaluations of LLM Inference Frameworks
 
@@ -16,7 +16,7 @@
 * **Quantization:** Evaluate impact on memory reduction vs. performance loss (Floating point precision).
 * **Future Scope:** Potential extension to an organizational model serving & fine-tuning platform.
 
-### ✅ Next Steps (Action Items)
+### 4. Next Steps (Action Items)
 - [ ] **Research:** Read the original **vLLM paper** and predecessor studies.
 - [ ] **Setup:** Install vLLM and explore core parameters.
 - [ ] **Planning:** Define specific metrics for benchmarking.
