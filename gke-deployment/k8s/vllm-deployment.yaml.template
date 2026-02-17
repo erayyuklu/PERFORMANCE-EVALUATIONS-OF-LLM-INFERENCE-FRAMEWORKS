@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${DEPLOYMENT_NAME}
+  labels:
+    app: ${DEPLOYMENT_NAME}
+spec:
+  replicas: ${REPLICAS}
+  selector:
+    matchLabels:
+      app: ${DEPLOYMENT_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${DEPLOYMENT_NAME}
+    spec:
+      containers:
+        - name: vllm
+          image: ${VLLM_IMAGE}
+          args:
+            - "--model"
+            - "${MODEL_NAME}"
+            - "--max-model-len"
+            - "${MAX_MODEL_LEN}"
+            - "--gpu-memory-utilization"
+            - "${GPU_MEMORY_UTILIZATION}"
+            - "--dtype"
+            - "${DTYPE}"
+            - "--tensor-parallel-size"
+            - "${TENSOR_PARALLEL_SIZE}"
+            - "--port"
+            - "${SERVICE_PORT}"
+          ports:
+            - containerPort: ${SERVICE_PORT}
+              protocol: TCP
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token-secret
+                  key: HF_TOKEN
+          resources:
+            requests:
+              cpu: "${CPU_REQUEST}"
+              memory: "${MEMORY_REQUEST}"
+              nvidia.com/gpu: "${GPU_COUNT}"
+            limits:
+              cpu: "${CPU_LIMIT}"
+              memory: "${MEMORY_LIMIT}"
+              nvidia.com/gpu: "${GPU_COUNT}"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: ${SERVICE_PORT}
+            initialDelaySeconds: 240
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: ${SERVICE_PORT}
+            initialDelaySeconds: 240
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
