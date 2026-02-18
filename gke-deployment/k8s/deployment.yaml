@@ -1,37 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ${DEPLOYMENT_NAME}
+  name: vllm-server
   labels:
-    app: ${DEPLOYMENT_NAME}
+    app: vllm-server
 spec:
-  replicas: ${REPLICAS}
+  replicas: 1
   selector:
     matchLabels:
-      app: ${DEPLOYMENT_NAME}
+      app: vllm-server
   template:
     metadata:
       labels:
-        app: ${DEPLOYMENT_NAME}
+        app: vllm-server
     spec:
       containers:
         - name: vllm
-          image: ${VLLM_IMAGE}
+          image: vllm/vllm-openai:latest
           args:
-            - "--model"
-            - "${MODEL_NAME}"
-            - "--max-model-len"
-            - "${MAX_MODEL_LEN}"
-            - "--gpu-memory-utilization"
-            - "${GPU_MEMORY_UTILIZATION}"
-            - "--dtype"
-            - "${DTYPE}"
-            - "--tensor-parallel-size"
-            - "${TENSOR_PARALLEL_SIZE}"
-            - "--port"
-            - "${SERVICE_PORT}"
+            - "--json-arg"
+            - "$(VLLM_CONFIG)"
           ports:
-            - containerPort: ${SERVICE_PORT}
+            - containerPort: 8000
               protocol: TCP
           env:
             - name: HF_TOKEN
@@ -39,19 +29,25 @@ spec:
                 secretKeyRef:
                   name: hf-token-secret
                   key: HF_TOKEN
+            - name: VLLM_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: vllm-config
+
           resources:
             requests:
-              cpu: "${CPU_REQUEST}"
-              memory: "${MEMORY_REQUEST}"
-              nvidia.com/gpu: "${GPU_COUNT}"
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
             limits:
-              cpu: "${CPU_LIMIT}"
-              memory: "${MEMORY_LIMIT}"
-              nvidia.com/gpu: "${GPU_COUNT}"
+              cpu: "6"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
           livenessProbe:
             httpGet:
               path: /health
-              port: ${SERVICE_PORT}
+              port: 8000
             initialDelaySeconds: 240
             periodSeconds: 30
             timeoutSeconds: 5
@@ -59,11 +55,12 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: ${SERVICE_PORT}
+              port: 8000
             initialDelaySeconds: 240
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes: []
       tolerations:
         - key: "nvidia.com/gpu"
           operator: "Exists"

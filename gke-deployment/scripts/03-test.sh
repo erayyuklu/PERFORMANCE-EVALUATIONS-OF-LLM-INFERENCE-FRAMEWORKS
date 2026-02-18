@@ -7,6 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config.env"
 
+# Read service name and port from the K8s manifest
+SERVICE_NAME=$(kubectl get svc -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+SERVICE_PORT=$(kubectl get svc -n "${K8S_NAMESPACE}" "${SERVICE_NAME}" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
+MODEL_NAME=$(kubectl get deployment -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].spec.template.spec.containers[0].args[1]}' 2>/dev/null)
+
 LOCAL_PORT="${1:-${SERVICE_PORT}}"
 
 # --- Start port-forward in background ---

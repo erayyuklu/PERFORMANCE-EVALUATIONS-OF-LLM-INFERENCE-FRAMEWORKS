@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 06-cleanup-budget.sh — Remove budget alert resources
-# Usage: 06-cleanup-budget.sh [--function | --budget | --topic | --all]
+# cleanup.sh — Remove budget alert resources
+# Usage: cleanup.sh [--function | --budget | --topic | --all]
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../../config.env"
+source "${SCRIPT_DIR}/../budget-config.env"
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
+
+# Uses REGION from config.env instead of FUNCTION_REGION
+FUNCTION_REGION="${REGION}"
 
 usage() {
     echo "Usage: $0 [--function | --budget | --topic | --all]"
@@ -45,8 +49,8 @@ delete_budget() {
     if [ -n "${BUDGET_NAME}" ]; then
         echo "Deleting budget ${BUDGET_DISPLAY_NAME}..."
         gcloud billing budgets delete "${BUDGET_NAME}" \
-            --billing-account="${BILLING_ACCOUNT_ID}" \
-            --quiet
+        --billing-account="${BILLING_ACCOUNT_ID}" \
+        --quiet
         echo "Budget deleted."
     else
         echo "Budget ${BUDGET_DISPLAY_NAME} not found."

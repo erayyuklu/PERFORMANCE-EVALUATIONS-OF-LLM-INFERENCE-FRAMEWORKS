@@ -13,8 +13,7 @@ if [ -f "${SECRETS_FILE}" ]; then
     source "${SECRETS_FILE}"
 fi
 
-PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
-TEMPLATE_DIR="${SCRIPT_DIR}/../k8s"
+K8S_DIR="${SCRIPT_DIR}/../k8s"
 
 # --- Validate HF_TOKEN ---
 if [ -z "${HF_TOKEN:-}" ]; then
@@ -34,19 +33,20 @@ kubectl create secret generic hf-token-secret \
     --dry-run=client -o yaml | kubectl apply -f -
 echo "HF token secret created."
 
-# --- Render and apply templates ---
-export MODEL_NAME VLLM_IMAGE DEPLOYMENT_NAME SERVICE_NAME SERVICE_PORT
-export MAX_MODEL_LEN GPU_MEMORY_UTILIZATION DTYPE TENSOR_PARALLEL_SIZE
-export GPU_COUNT REPLICAS CPU_REQUEST CPU_LIMIT MEMORY_REQUEST MEMORY_LIMIT
-export K8S_NAMESPACE
+# --- Create vLLM config ConfigMap ---
+kubectl create configmap vllm-args-config \
+    --namespace="${K8S_NAMESPACE}" \
+    --from-file=vllm-config="${K8S_DIR}/config.json" \
+    --dry-run=client -o yaml | kubectl apply -f -
+echo "vLLM config ConfigMap created."
 
+# --- Apply K8s manifests ---
 echo "Applying Kubernetes manifests..."
-for template in "${TEMPLATE_DIR}"/*.yaml.template; do
-    envsubst < "${template}" | kubectl apply -n "${K8S_NAMESPACE}" -f -
-done
+kubectl apply -n "${K8S_NAMESPACE}" -f "${K8S_DIR}/"
 
 # --- Wait for rollout ---
-echo "Waiting for deployment rollout (this may take several minutes while the model downloads)..."
+DEPLOYMENT_NAME=$(kubectl get deployments -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+echo "Waiting for deployment ${DEPLOYMENT_NAME} rollout (this may take several minutes while the model downloads)..."
 kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
     --namespace="${K8S_NAMESPACE}" \
     --timeout=600s

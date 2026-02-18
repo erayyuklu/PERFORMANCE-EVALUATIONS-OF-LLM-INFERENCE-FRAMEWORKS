@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 05-setup-budget-alert.sh — Create Pub/Sub topic, Cloud Function, and Budget
+# deploy.sh — Create Pub/Sub topic, Cloud Function, and Budget
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../../config.env"
+source "${SCRIPT_DIR}/../budget-config.env"
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
-FUNCTION_SOURCE="${SCRIPT_DIR}/../budget/function"
+FUNCTION_SOURCE="${SCRIPT_DIR}/../function"
+
+# Uses REGION from config.env instead of FUNCTION_REGION
+FUNCTION_REGION="${REGION}"
 
 # --- Enable required APIs ---
 APIS=("cloudfunctions.googleapis.com" "pubsub.googleapis.com" "cloudbilling.googleapis.com" "cloudresourcemanager.googleapis.com" "billingbudgets.googleapis.com" "cloudbuild.googleapis.com" "run.googleapis.com" "eventarc.googleapis.com")
@@ -60,6 +64,31 @@ gcloud functions deploy "${FUNCTION_NAME}" \
     --quiet
 
 echo "Cloud Function deployed."
+
+# --- 4. Grant Pub/Sub permission to invoke the Cloud Run service ---
+PUBSUB_SA="service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com"
+
+echo "Granting iam.serviceAccountTokenCreator to Pub/Sub service agent..."
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${PUBSUB_SA}" \
+    --role="roles/iam.serviceAccountTokenCreator" \
+    --quiet >/dev/null 2>&1
+
+echo "Granting run.invoker to default compute service account..."
+gcloud run services add-iam-policy-binding "${FUNCTION_NAME}" \
+    --region="${FUNCTION_REGION}" \
+    --member="serviceAccount:${COMPUTE_SA}" \
+    --role="roles/run.invoker" \
+    --quiet >/dev/null 2>&1
+
+# --- 5. Grant billing permission so the function can disable billing ---
+BILLING_ACCOUNT_ID="${BILLING_ACCOUNT_ID:-$(gcloud billing projects describe "${PROJECT_ID}" --format="value(billingAccountName)" 2>/dev/null | sed 's|billingAccounts/||')}"
+
+echo "Granting billing.admin to ${COMPUTE_SA}..."
+gcloud billing accounts add-iam-policy-binding "${BILLING_ACCOUNT_ID}" \
+    --member="serviceAccount:${COMPUTE_SA}" \
+    --role="roles/billing.admin" \
+    --quiet >/dev/null 2>&1
 
 # --- 3. Create Budget ---
 BILLING_ACCOUNT_ID="${BILLING_ACCOUNT_ID:-$(gcloud billing projects describe "${PROJECT_ID}" --format="value(billingAccountName)" 2>/dev/null | sed 's|billingAccounts/||')}"
