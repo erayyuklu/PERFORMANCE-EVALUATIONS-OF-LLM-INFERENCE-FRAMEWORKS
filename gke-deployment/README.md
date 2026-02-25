@@ -45,46 +45,91 @@ export HF_TOKEN="your-huggingface-token"
 ./scripts/04-cleanup.sh --all          # everything
 ```
 
+## Monitoring (Prometheus + Grafana)
+
+The monitoring stack deploys **kube-prometheus-stack** (Prometheus, Grafana, Alertmanager) and automatically wires up vLLM metric scraping and dashboard provisioning.
+
+```bash
+# 5. Deploy the monitoring stack
+./scripts/05-monitoring.sh
+```
+
+This script:
+1. Installs `kube-prometheus-stack` via Helm into the `monitoring` namespace.
+2. Downloads the **official vLLM Grafana dashboards** from the [vllm-project/vllm](https://github.com/vllm-project/vllm) GitHub repo.
+3. Creates a ConfigMap so the Grafana sidecar auto-imports the dashboards.
+4. Applies a `PodMonitor` so Prometheus scrapes vLLM pods on port `8000/metrics` every 15s.
+
+### Accessing the UIs
+
+**Grafana** (dashboards & visualization):
+
+```bash
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+# → http://localhost:3000  (login: admin / admin)
+```
+
+**Prometheus** (raw metrics & queries):
+
+```bash
+kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+# → http://localhost:9090
+```
+
+### Key Dashboards
+
+All dashboards are auto-provisioned under the **"vLLM Monitoring"** folder in Grafana:
+
+| Dashboard | What it shows |
+|---|---|
+| **Performance Statistics** | Latency (TTFT, TPOT, E2E), throughput (tokens/sec), GPU KV cache utilization |
+| **Query Statistics** | Request volume, queue depth, active/pending/finished requests |
+| **vLLM Overview** (legacy) | Combined view of request metrics, model performance, and resource usage |
+
 ## Budget Alert (Cost Control)
 
 Automatically disable billing when spending exceeds the budget. This creates a Pub/Sub topic, a Cloud Function, and a Budget Alert.
 
 ```bash
-# 5. Set up budget alert pipeline
-./scripts/05-setup-budget-alert.sh
+# Deploy budget alert pipeline
+./budget/scripts/deploy.sh
 
-# 6. Cleanup budget resources (pick one)
-./scripts/06-cleanup-budget.sh --function   # Cloud Function only
-./scripts/06-cleanup-budget.sh --budget     # budget alert only
-./scripts/06-cleanup-budget.sh --topic      # Pub/Sub topic only
-./scripts/06-cleanup-budget.sh --all        # everything
+# Cleanup budget resources
+./budget/scripts/cleanup.sh
 ```
 
-Configure budget amount, thresholds, and function settings in `config.env`.
+Configure budget amount and thresholds in [`budget/budget-config.env`](budget/budget-config.env).
 
-> **Warning:** When triggered, the function removes the billing account from the project, shutting down all paid resources.
+> **Warning:** When triggered, the Cloud Function removes the billing account from the project, shutting down all paid resources.
 
 ## File Structure
 
 ```
 gke-deployment/
 ├── config.env                              # all configuration
+├── secrets.env                             # HF_TOKEN (git-ignored)
 ├── README.md
 ├── budget/
-│   └── function/
-│       ├── main.py                         # Cloud Function source
-│       └── requirements.txt                # Python dependencies
+│   ├── budget-config.env                   # budget-specific settings
+│   ├── function/
+│   │   ├── main.py                         # Cloud Function source
+│   │   └── requirements.txt                # Python dependencies
+│   └── scripts/
+│       ├── deploy.sh                       # deploy budget alert pipeline
+│       └── cleanup.sh                      # remove budget resources
 ├── k8s/
-│   ├── vllm-deployment.yaml.template       # Deployment manifest
-│   └── vllm-service.yaml.template          # Service manifest
+│   ├── config.json                         # vLLM args (model, dtype, etc.)
+│   ├── deployment.yaml                     # vLLM Deployment manifest
+│   ├── service.yaml                        # vLLM Service manifest
+│   └── monitoring/
+│       └── pod-monitor.yaml                # PodMonitor for Prometheus scraping
 └── scripts/
     ├── 00-prerequisites.sh                 # validate tools, enable APIs
-    ├── 01-setup-cluster.sh                 # create cluster + GPU pool
-    ├── 02-deploy-vllm.sh                   # deploy vLLM to K8s
+    ├── 01-gke.sh                           # create cluster + GPU pool
+    ├── 02-deploy.sh                        # deploy vLLM to K8s
     ├── 03-test.sh                          # port-forward and test
     ├── 04-cleanup.sh                       # tear down resources
-    ├── 05-setup-budget-alert.sh            # budget alert pipeline
-    └── 06-cleanup-budget.sh                # remove budget resources
+    └── 05-monitoring.sh                    # deploy Prometheus + Grafana
 ```
 
 ## Notes
