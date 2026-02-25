@@ -10,7 +10,6 @@ source "${SCRIPT_DIR}/../config.env"
 # Read service name and port from the K8s manifest
 SERVICE_NAME=$(kubectl get svc -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 SERVICE_PORT=$(kubectl get svc -n "${K8S_NAMESPACE}" "${SERVICE_NAME}" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
-MODEL_NAME=$(kubectl get deployment -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].spec.template.spec.containers[0].args[1]}' 2>/dev/null)
 
 LOCAL_PORT="${1:-${SERVICE_PORT}}"
 
@@ -34,8 +33,17 @@ BASE_URL="http://localhost:${LOCAL_PORT}"
 # --- Test: List models ---
 echo ""
 echo "=== GET /v1/models ==="
-curl -s "${BASE_URL}/v1/models" | head -c 2000
+MODELS_RESPONSE=$(curl -s "${BASE_URL}/v1/models")
+echo "${MODELS_RESPONSE}" | head -c 2000
 echo ""
+
+# --- Extract the actual model name from the live endpoint ---
+MODEL_NAME=$(echo "${MODELS_RESPONSE}" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -z "${MODEL_NAME}" ]; then
+    echo "ERROR: Could not extract model name from /v1/models response."
+    exit 1
+fi
+echo "Detected model: ${MODEL_NAME}"
 
 # --- Test: Completions ---
 echo ""
