@@ -50,7 +50,33 @@ DEPLOYMENT_NAME=$(kubectl get deployments -n "${K8S_NAMESPACE}" -o jsonpath='{.i
 echo "Waiting for deployment ${DEPLOYMENT_NAME} rollout (this may take several minutes while the model downloads)..."
 kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
     --namespace="${K8S_NAMESPACE}" \
-    --timeout=600s
+    --timeout=60s
 
 echo "Deployment complete."
 kubectl get pods -n "${K8S_NAMESPACE}"
+
+# --- Wait for external IP ---
+echo ""
+echo "Waiting for LoadBalancer external IP (this may take 1-3 minutes)..."
+EXTERNAL_IP=""
+for i in $(seq 1 30); do
+    EXTERNAL_IP=$(kubectl get svc vllm-service -n "${K8S_NAMESPACE}" \
+        -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+    if [ -n "${EXTERNAL_IP}" ]; then
+        break
+    fi
+    echo "  Still waiting... (${i}/30)"
+    sleep 10
+done
+
+if [ -n "${EXTERNAL_IP}" ]; then
+    echo ""
+    echo "=============================================="
+    echo "  vLLM external IP : ${EXTERNAL_IP}"
+    echo "  API base URL      : http://${EXTERNAL_IP}/v1"
+    echo "  Models endpoint   : http://${EXTERNAL_IP}/v1/models"
+    echo "=============================================="
+else
+    echo "WARNING: External IP not yet assigned. Check later with:"
+    echo "  kubectl get svc vllm-service -n ${K8S_NAMESPACE}"
+fi

@@ -4,12 +4,14 @@ metadata:
   name: vllm-service
   labels:
     app: vllm-server
+  annotations:
+    cloud.google.com/load-balancer-type: "External"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: vllm-server
   ports:
-    - port: 8000
-      targetPort: 8000
+    - name: http
       protocol: TCP
-      name: http
+      port: 80
+      targetPort: 8000

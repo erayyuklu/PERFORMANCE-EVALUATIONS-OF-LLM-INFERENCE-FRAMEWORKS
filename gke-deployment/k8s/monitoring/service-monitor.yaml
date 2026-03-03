@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vllm-service-monitor
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - vllm
+  selector:
+    matchLabels:
+      app: vllm-server
+  endpoints:
+    - port: http          # matches the named port in service.yaml (port 80 → targetPort 8000)
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
