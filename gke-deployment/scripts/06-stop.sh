@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# =============================================================================
+# 06-stop.sh — Pause the cluster to stop GPU charges without losing resources
+#
+# What this does:
+#   --pause   Scale GPU node pool to 0 (stops VM charges, keeps disk & pool config)
+#   --resume  Scale GPU node pool back to its original node count
+#
+# What is preserved:
+#   ✓ Cluster and node pool definitions (no reconfig needed on resume)
+#   ✓ Persistent disks (no data loss)
+#   ✓ Kubernetes manifests / namespace / service definitions
+#
+# What stops charging:
+#   ✓ GPU VM instances (biggest cost driver)
+#   ✓ Nvidia L4 GPU reservation
+#
+# Note: The GKE control plane (e2-medium system pool) continues to run at
+#       minimal cost. Delete the cluster entirely with 04-cleanup.sh --all
+#       if you want zero cost.
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config.env"
+
+PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
+
+usage() {
+    echo "Usage: $0 [--pause | --resume]"
+    echo ""
+    echo "  --pause   Scale GPU node pool to 0  (stop GPU charges)"
+    echo "  --resume  Scale GPU node pool back to ${NUM_GPU_NODES} node(s)"
+    exit 1
+}
+
+check_cluster() {
+    EXISTING=$(gcloud container clusters list \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --filter="name=${CLUSTER_NAME}" \
+        --format="value(name)" 2>/dev/null)
+
+    if [ -z "${EXISTING}" ]; then
+        echo "ERROR: Cluster '${CLUSTER_NAME}' not found in zone '${ZONE}'."
+        echo "       Run 01-gke.sh first to create it."
+        exit 1
+    fi
+}
+
+pause_cluster() {
+    echo "============================================================"
+    echo "  Pausing: scaling GPU node pool to 0"
+    echo "  Cluster  : ${CLUSTER_NAME}"
+    echo "  Node pool: ${NODE_POOL_NAME}"
+    echo "  Zone     : ${ZONE}"
+    echo "============================================================"
+
+    check_cluster
+
+    # Scale down the GPU node pool — VMs are deleted, GPUs freed, disks kept
+    gcloud container clusters resize "${CLUSTER_NAME}" \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --node-pool="${NODE_POOL_NAME}" \
+        --num-nodes=0 \
+        --quiet
+
+    echo ""
+    echo "✓ GPU node pool scaled to 0. GPU/VM charges have stopped."
+    echo "  Persistent disks and cluster configuration are intact."
+    echo ""
+    echo "  To resume:  bash $(basename "$0") --resume"
+    echo "  To destroy: bash 04-cleanup.sh --all"
+}
+
+resume_cluster() {
+    echo "============================================================"
+    echo "  Resuming: scaling GPU node pool to ${NUM_GPU_NODES} node(s)"
+    echo "  Cluster  : ${CLUSTER_NAME}"
+    echo "  Node pool: ${NODE_POOL_NAME}"
+    echo "  Zone     : ${ZONE}"
+    echo "============================================================"
+
+    check_cluster
+
+    gcloud container clusters resize "${CLUSTER_NAME}" \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --node-pool="${NODE_POOL_NAME}" \
+        --num-nodes="${NUM_GPU_NODES}" \
+        --quiet
+
+    echo ""
+    echo "Fetching updated cluster credentials..."
+    gcloud container clusters get-credentials "${CLUSTER_NAME}" \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --quiet
+
+    echo ""
+    echo "✓ GPU node pool scaled back to ${NUM_GPU_NODES} node(s)."
+    echo ""
+    kubectl get nodes
+    echo ""
+    echo "  Re-deploy workloads: bash 02-deploy.sh"
+}
+
+if [ $# -eq 0 ]; then
+    usage
+fi
+
+case "$1" in
+    --pause)
+        pause_cluster
+        ;;
+    --resume)
+        resume_cluster
+        ;;
+    *)
+        usage
+        ;;
+esac
