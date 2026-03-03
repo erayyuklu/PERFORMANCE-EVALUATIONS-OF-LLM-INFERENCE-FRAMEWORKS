@@ -22,8 +22,18 @@ spec:
         - name: vllm
           image: vllm/vllm-openai:latest
           args:
-            - "--json-arg"
-            - "$(VLLM_CONFIG)"
+            - "--model"
+            - "$(MODEL)"
+            - "--max-model-len"
+            - "$(MAX_MODEL_LEN)"
+            - "--gpu-memory-utilization"
+            - "$(GPU_MEMORY_UTILIZATION)"
+            - "--dtype"
+            - "$(DTYPE)"
+            - "--tensor-parallel-size"
+            - "$(TENSOR_PARALLEL_SIZE)"
+            - "--port"
+            - "$(PORT)"
           ports:
             - name: http
               containerPort: 8000
@@ -34,11 +44,36 @@ spec:
                 secretKeyRef:
                   name: hf-token-secret
                   key: HF_TOKEN
-            - name: VLLM_CONFIG
+            - name: MODEL
               valueFrom:
                 configMapKeyRef:
                   name: vllm-args-config
-                  key: vllm-config
+                  key: MODEL
+            - name: MAX_MODEL_LEN
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: MAX_MODEL_LEN
+            - name: GPU_MEMORY_UTILIZATION
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: GPU_MEMORY_UTILIZATION
+            - name: DTYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: DTYPE
+            - name: TENSOR_PARALLEL_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: TENSOR_PARALLEL_SIZE
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: PORT
 
           resources:
             requests:

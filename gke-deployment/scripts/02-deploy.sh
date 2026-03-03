@@ -34,9 +34,10 @@ kubectl create secret generic hf-token-secret \
 echo "HF token secret created."
 
 # --- Create vLLM config ConfigMap ---
+VLLM_CONFIG_ENV="${SCRIPT_DIR}/../vllm_config.env"
 kubectl create configmap vllm-args-config \
     --namespace="${K8S_NAMESPACE}" \
-    --from-file=vllm-config="${K8S_DIR}/config.json" \
+    --from-env-file="${VLLM_CONFIG_ENV}" \
     --dry-run=client -o yaml | kubectl apply -f -
 echo "vLLM config ConfigMap created."
 
