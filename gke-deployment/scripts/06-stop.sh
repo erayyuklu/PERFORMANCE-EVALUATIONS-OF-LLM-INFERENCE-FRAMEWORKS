@@ -58,7 +58,17 @@ pause_cluster() {
 
     check_cluster
 
+    # Scale down system pool first (e2-medium VMs)
+    echo "Scaling down system node pool (default-pool)..."
+    gcloud container clusters resize "${CLUSTER_NAME}" \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --node-pool="default-pool" \
+        --num-nodes=0 \
+        --quiet
+
     # Scale down the GPU node pool — VMs are deleted, GPUs freed, disks kept
+    echo "Scaling down GPU node pool (${NODE_POOL_NAME})..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
@@ -67,7 +77,7 @@ pause_cluster() {
         --quiet
 
     echo ""
-    echo "✓ GPU node pool scaled to 0. GPU/VM charges have stopped."
+    echo "✓ Both node pools scaled to 0. GPU/VM charges have stopped."
     echo "  Persistent disks and cluster configuration are intact."
     echo ""
     echo "  To resume:  bash $(basename "$0") --resume"
@@ -84,6 +94,16 @@ resume_cluster() {
 
     check_cluster
 
+    # Bring system pool up first so the cluster is schedulable
+    echo "Scaling up system node pool (default-pool)..."
+    gcloud container clusters resize "${CLUSTER_NAME}" \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --node-pool="default-pool" \
+        --num-nodes=1 \
+        --quiet
+
+    echo "Scaling up GPU node pool (${NODE_POOL_NAME})..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
