@@ -6,3 +6,4 @@ matplotlib>=3.8.0
 seaborn>=0.13.0
 numpy>=1.26.0
 jupyter>=1.0.0
+prometheus_client>=0.20.0

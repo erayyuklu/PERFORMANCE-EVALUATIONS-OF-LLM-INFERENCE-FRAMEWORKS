@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: locust-service-monitor
+  namespace: locust
+  labels:
+    # Must match kube-prometheus-stack's serviceMonitorSelector label
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - locust
+  selector:
+    matchLabels:
+      app: locust
+      role: master
+  endpoints:
+    - port: metrics          # named port "metrics" → 9646
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

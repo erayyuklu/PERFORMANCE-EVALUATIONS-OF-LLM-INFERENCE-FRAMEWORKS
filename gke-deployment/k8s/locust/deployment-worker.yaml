@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust-worker
+  namespace: locust
+  labels:
+    app: locust
+    role: worker
+spec:
+  replicas: 2   # increase for higher concurrency headroom
+  selector:
+    matchLabels:
+      app: locust
+      role: worker
+  template:
+    metadata:
+      labels:
+        app: locust
+        role: worker
+    spec:
+      # -----------------------------------------------------------------------
+      # Isolation: same as master — no GPU toleration → CPU nodes only
+      # -----------------------------------------------------------------------
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: cloud.google.com/gke-nodepool
+                    operator: NotIn
+                    values:
+                      - gpu-pool
+
+      containers:
+        - name: locust-worker
+          image: europe-west3-docker.pkg.dev/PROJECT_ID/locust/locust-vllm:latest
+          imagePullPolicy: Always
+          args:
+            - "--worker"
+            - "--master-host=locust-master"
+            - "-f"
+            - "/locust/locustfile.py"
+          env:
+            - name: VLLM_MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_MODEL_NAME
+            - name: VLLM_MAX_TOKENS
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_MAX_TOKENS
+            - name: VLLM_DATASET
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_DATASET
+            - name: VLLM_PROMPT_LEN
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_PROMPT_LEN
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1"
+              memory: "256Mi"

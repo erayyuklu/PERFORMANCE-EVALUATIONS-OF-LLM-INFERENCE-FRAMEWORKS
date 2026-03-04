@@ -59,6 +59,10 @@ helm upgrade --install "${HELM_RELEASE}" prometheus-community/kube-prometheus-st
     --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
     --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
     --set prometheus.service.type="${PROMETHEUS_SVC_TYPE}" \
+    --set grafana.imageRenderer.enabled=true \
+    --set grafana.imageRenderer.replicas=1 \
+    --set grafana."grafana\.ini".rendering.server_url=http://${HELM_RELEASE}-grafana-image-renderer.${MONITORING_NS}:8081/render \
+    --set grafana."grafana\.ini".rendering.callback_url=http://${HELM_RELEASE}-grafana.${MONITORING_NS}:80/ \
     --wait \
     --timeout 5m
 
@@ -97,10 +101,17 @@ else
     echo "    ⚠  No dashboard files were downloaded. Skipping."
 fi
 
-# 5. Apply ServiceMonitor for vLLM (scrapes via the LoadBalancer service, not pods directly)
+# 5. Apply ServiceMonitors
 echo "==> Applying ServiceMonitor to scrape vLLM via vllm-service..."
 kubectl apply -n "${MONITORING_NS}" -f "${K8S_DIR}/monitoring/service-monitor.yaml"
 echo "    ✓ ServiceMonitor applied. Prometheus will scrape vLLM via vllm-service:http/metrics."
+
+echo "==> Applying ServiceMonitor and Grafana Dashboard for Locust..."
+# The ServiceMonitor for Locust goes into the 'locust' namespace so it can find 'locust-master'
+kubectl apply -f "${K8S_DIR}/locust/service-monitor.yaml" || echo "    ⚠ Could not apply locust ServiceMonitor (is locust namespace created?)"
+# The dashboard ConfigMap goes into monitoring
+kubectl apply -n "${MONITORING_NS}" -f "${K8S_DIR}/monitoring/locust-dashboard-cm.yaml"
+echo "    ✓ Locust dashboard and ServiceMonitor applied."
 
 # 6. Resolve access URLs
 echo ""

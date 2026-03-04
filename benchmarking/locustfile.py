@@ -4,16 +4,23 @@ vLLM Benchmark — Locust Load Test
 Measures TTFT, TPOT, ITL, and E2E latency for every request
 against the vLLM OpenAI-compatible /v1/chat/completions endpoint.
 
-Usage:
+Usage (local):
     locust -f locustfile.py --host http://localhost:8000 --headless \
            -u 1 -r 1 --run-time 60s \
            --csv results/single_user
 
+Usage (in-cluster, from the Locust master pod):
+    The host is set via LOCUST_HOST env var (automatically wired from the
+    ConfigMap to http://vllm-service.vllm.svc.cluster.local).
+    Prometheus metrics are served on :9646 by locust-plugins PrometheusListener
+    and scraped by kube-prometheus-stack via the locust ServiceMonitor.
+
 Environment variables:
-    VLLM_MODEL_NAME   — model identifier sent in the request body (default: see below)
-    VLLM_MAX_TOKENS   — max tokens to generate per request (default: 256)
-    VLLM_DATASET      — path to prompt JSON dataset (default: prompts/dataset.json)
-    VLLM_PROMPT_LEN   — filter by prompt category: short | medium | long | all (default: all)
+    VLLM_MODEL_NAME        — model identifier sent in the request body (default: see below)
+    VLLM_MAX_TOKENS        — max tokens to generate per request (default: 256)
+    VLLM_DATASET           — path to prompt JSON dataset (default: prompts/dataset.json)
+    VLLM_PROMPT_LEN        — filter by prompt category: short | medium | long | all (default: all)
+    LOCUST_PROMETHEUS_PORT — port for the Prometheus /metrics endpoint (default: 9646)
 """
 
 import json
@@ -26,6 +33,16 @@ import sseclient
 from locust import HttpUser, between, events, task
 from locust.runners import MasterRunner, WorkerRunner
 
+# prometheus_client for built-in metrics export (replaces locust-plugins)
+try:
+    from prometheus_client import (
+        CollectorRegistry, Gauge, Counter, Histogram,
+        start_http_server as _prom_start_http_server,
+    )
+    _HAS_PROM_CLIENT = True
+except ImportError:
+    _HAS_PROM_CLIENT = False
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -34,9 +51,78 @@ MAX_TOKENS  = int(os.getenv("VLLM_MAX_TOKENS", "256"))
 DATASET_PATH = Path(os.getenv("VLLM_DATASET", Path(__file__).parent / "prompts" / "dataset.json"))
 PROMPT_LEN  = os.getenv("VLLM_PROMPT_LEN", "all")   # short | medium | long | all
 CSV_PREFIX  = os.getenv("CUSTOM_CSV_PREFIX", "")      # set by run_experiment.sh
+PROMETHEUS_PORT = int(os.getenv("LOCUST_PROMETHEUS_PORT", "9646"))
 
 # Aggregated custom metrics — written to CSV at end of test
 _custom_rows: list[dict] = []
+
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics export (built-in, no locust-plugins dependency)
+# ---------------------------------------------------------------------------
+_prom_registry = CollectorRegistry() if _HAS_PROM_CLIENT else None
+
+if _HAS_PROM_CLIENT:
+    _prom_users = Gauge(
+        "locust_users", "Current number of active Locust users",
+        registry=_prom_registry,
+    )
+    _prom_requests = Counter(
+        "locust_requests_total", "Total request count",
+        ["method", "name", "result"],
+        registry=_prom_registry,
+    )
+    _prom_response_time = Histogram(
+        "locust_response_time_seconds",
+        "Response time in seconds",
+        ["method", "name"],
+        buckets=(0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, float("inf")),
+        registry=_prom_registry,
+    )
+    _prom_fail_ratio = Gauge(
+        "locust_fail_ratio", "Current failure ratio (0-1)",
+        registry=_prom_registry,
+    )
+
+
+@events.init.add_listener
+def _on_locust_init(environment, **kwargs):
+    """
+    Start a lightweight Prometheus /metrics server on the master (or standalone)
+    process. Workers don't expose Prometheus; they send stats to master.
+    """
+    if isinstance(environment.runner, WorkerRunner):
+        return
+
+    if not _HAS_PROM_CLIENT:
+        print(
+            "[benchmarking] WARNING: prometheus_client not installed. "
+            "Prometheus /metrics endpoint will NOT be available. "
+            "Install with: pip install prometheus_client"
+        )
+        return
+
+    # Start HTTP /metrics server on PROMETHEUS_PORT using the custom registry
+    _prom_start_http_server(PROMETHEUS_PORT, registry=_prom_registry)
+    print(f"[benchmarking] Prometheus /metrics listening on :{PROMETHEUS_PORT}")
+
+    # Background greenlet to poll runner stats every 2 seconds
+    import gevent
+
+    def _update_prom_metrics():
+        while True:
+            try:
+                runner = environment.runner
+                if runner and runner.stats:
+                    _prom_users.set(runner.user_count)
+                    total = runner.stats.total
+                    if total.num_requests > 0:
+                        _prom_fail_ratio.set(total.fail_ratio)
+            except Exception:
+                pass
+            gevent.sleep(2)
+
+    gevent.spawn(_update_prom_metrics)
 
 
 # ---------------------------------------------------------------------------

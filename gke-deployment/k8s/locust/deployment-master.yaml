@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust-master
+  namespace: locust
+  labels:
+    app: locust
+    role: master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: locust
+      role: master
+  template:
+    metadata:
+      labels:
+        app: locust
+        role: master
+      annotations:
+        # Prometheus will also discover via ServiceMonitor; this is a fallback.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9646"
+        prometheus.io/path: "/metrics"
+    spec:
+      # -----------------------------------------------------------------------
+      # Isolation: no GPU toleration → stays on CPU node pool
+      # -----------------------------------------------------------------------
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: cloud.google.com/gke-nodepool
+                    operator: NotIn
+                    values:
+                      - gpu-pool
+      # No tolerations block → GPU-tainted nodes are avoided automatically.
+
+      containers:
+        - name: locust-master
+          image: europe-west3-docker.pkg.dev/PROJECT_ID/locust/locust-vllm:latest
+          imagePullPolicy: Always
+          args:
+            - "--master"
+            - "-f"
+            - "/locust/locustfile.py"
+          ports:
+            - name: web
+              containerPort: 8089
+            - name: worker-comm-1
+              containerPort: 5557
+            - name: worker-comm-2
+              containerPort: 5558
+            - name: metrics
+              containerPort: 9646
+          env:
+            - name: LOCUST_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_TARGET_HOST
+            - name: VLLM_MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_MODEL_NAME
+            - name: VLLM_MAX_TOKENS
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_MAX_TOKENS
+            - name: VLLM_DATASET
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_DATASET
+            - name: VLLM_PROMPT_LEN
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_PROMPT_LEN
+            - name: LOCUST_PROMETHEUS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: LOCUST_PROMETHEUS_PORT
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8089
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8089
+            initialDelaySeconds: 20
+            periodSeconds: 30

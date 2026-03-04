@@ -25,7 +25,7 @@ else
         --zone="${ZONE}" \
         --cluster-version="${CLUSTER_VERSION}" \
         --num-nodes=1 \
-        --machine-type="e2-medium" \
+        --machine-type="e2-standard-4" \
         --disk-size="${DISK_SIZE_GB}" \
         --quiet
     echo "Cluster created."
