@@ -29,7 +29,7 @@ python3 -c "
 import torch
 if torch.cuda.is_available():
     gpu = torch.cuda.get_device_name(0)
-    mem = torch.cuda.get_device_properties(0).total_mem / 1e9
+    mem = torch.cuda.get_device_properties(0).total_memory / 1e9
     print(f'  ✓ GPU detected: {gpu} ({mem:.1f} GB)')
 else:
     print('  ✗ No GPU detected! Make sure you selected a GPU machine.')
