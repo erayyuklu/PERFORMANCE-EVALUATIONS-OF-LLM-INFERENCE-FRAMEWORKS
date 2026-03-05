@@ -4,7 +4,7 @@
     "description": "Default vLLM settings — no modifications. Establishes the performance baseline.",
     "vllm_extra_args": "",
     "concurrency": [
-      1
+      4
     ],
     "prompt_categories": [
       "all"

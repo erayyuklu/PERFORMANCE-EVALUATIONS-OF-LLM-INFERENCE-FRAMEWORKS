@@ -131,6 +131,47 @@ patch_vllm_args() {
   wait_for_deployment
 }
 
+print_grafana_link() {
+  local duration_sec="${LOCUST_RUN_TIME%s}"
+
+  # Count total individual locust runs across all experiments
+  local total_runs=0
+  for idx in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
+    local e n_users n_cats
+    e=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}]")
+    n_users=$(echo "${e}" | jq '.concurrency | length')
+    n_cats=$(echo "${e}" | jq '.prompt_categories | length')
+    total_runs=$(( total_runs + n_users * n_cats ))
+  done
+
+  # Expected window: runs × (duration + 5 s cooldown) + 2 min overhead buffer
+  local total_sec=$(( total_runs * (duration_sec + 5) + 120 ))
+
+  local from_ms to_ms
+  from_ms=$(date +%s%3N)                              # epoch milliseconds (GNU date / Linux)
+  to_ms=$(( from_ms + total_sec * 1000 ))
+
+  # Resolve Grafana external IP
+  local grafana_ip
+  grafana_ip=$(
+    kubectl get svc -n monitoring \
+      -l "app.kubernetes.io/name=grafana" \
+      -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || true
+  )
+
+  if [[ -z "${grafana_ip}" ]]; then
+    log "⚠  Could not resolve Grafana external IP — dashboard link unavailable."
+    return
+  fi
+
+  local url="http://${grafana_ip}/d/locust-load-test/locust-load-test?orgId=1&from=${from_ms}&to=${to_ms}"
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  log "  Grafana — Locust Dashboard (absolute time range)"
+  log "  Covers ${total_runs} run(s) × ${duration_sec}s + overhead"
+  log "  ${url}"
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 run_locust() {
   local users="$1"
   local label="$2"
@@ -218,6 +259,10 @@ fi
 
 NUM_EXPERIMENTS=$(echo "${EXPERIMENTS_JSON}" | jq '. | length')
 log "Total experiments: ${NUM_EXPERIMENTS}"
+
+if [[ "${USE_IN_CLUSTER}" == "true" ]]; then
+  print_grafana_link
+fi
 
 for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")

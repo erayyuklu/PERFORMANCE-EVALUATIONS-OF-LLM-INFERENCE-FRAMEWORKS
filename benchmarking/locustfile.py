@@ -36,7 +36,7 @@ from locust.runners import MasterRunner, WorkerRunner
 # prometheus_client for built-in metrics export (replaces locust-plugins)
 try:
     from prometheus_client import (
-        CollectorRegistry, Gauge, Counter, Histogram,
+        CollectorRegistry, Gauge,
         start_http_server as _prom_start_http_server,
     )
     _HAS_PROM_CLIENT = True
@@ -67,20 +67,12 @@ if _HAS_PROM_CLIENT:
         "locust_users", "Current number of active Locust users",
         registry=_prom_registry,
     )
-    _prom_requests = Counter(
-        "locust_requests_total", "Total request count",
-        ["method", "name", "result"],
-        registry=_prom_registry,
-    )
-    _prom_response_time = Histogram(
-        "locust_response_time_seconds",
-        "Response time in seconds",
-        ["method", "name"],
-        buckets=(0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, float("inf")),
-        registry=_prom_registry,
-    )
     _prom_fail_ratio = Gauge(
         "locust_fail_ratio", "Current failure ratio (0-1)",
+        registry=_prom_registry,
+    )
+    _prom_rps = Gauge(
+        "locust_requests_per_second", "Current requests per second (all request types combined)",
         registry=_prom_registry,
     )
 
@@ -118,6 +110,7 @@ def _on_locust_init(environment, **kwargs):
                     total = runner.stats.total
                     if total.num_requests > 0:
                         _prom_fail_ratio.set(total.fail_ratio)
+                    _prom_rps.set(total.current_rps)
             except Exception:
                 pass
             gevent.sleep(2)

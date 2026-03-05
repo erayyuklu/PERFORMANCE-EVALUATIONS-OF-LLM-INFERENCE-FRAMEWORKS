@@ -106,11 +106,21 @@ echo "==> Applying ServiceMonitor to scrape vLLM via vllm-service..."
 kubectl apply -n "${MONITORING_NS}" -f "${K8S_DIR}/monitoring/service-monitor.yaml"
 echo "    ✓ ServiceMonitor applied. Prometheus will scrape vLLM via vllm-service:http/metrics."
 
+echo "==> Applying PodMonitor for GKE-managed DCGM exporter (GPU metrics)..."
+kubectl apply -f "${K8S_DIR}/monitoring/dcgm-pod-monitor.yaml"
+echo "    ✓ DCGM PodMonitor applied. Prometheus will scrape DCGM_FI_DEV_* metrics."
+
 echo "==> Applying ServiceMonitor and Grafana Dashboard for Locust..."
 # The ServiceMonitor for Locust goes into the 'locust' namespace so it can find 'locust-master'
 kubectl apply -f "${K8S_DIR}/locust/service-monitor.yaml" || echo "    ⚠ Could not apply locust ServiceMonitor (is locust namespace created?)"
-# The dashboard ConfigMap goes into monitoring
-kubectl apply -n "${MONITORING_NS}" -f "${K8S_DIR}/monitoring/locust-dashboard-cm.yaml"
+# The dashboard ConfigMap is built from the raw JSON file
+kubectl create configmap locust-dashboard \
+    --namespace="${MONITORING_NS}" \
+    --from-file=locust-dashboard.json="${K8S_DIR}/monitoring/locust-dashboard.json" \
+    --dry-run=client -o yaml | \
+kubectl label --local -f - grafana_dashboard=1 -o yaml | \
+kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \
+kubectl apply -f -
 echo "    ✓ Locust dashboard and ServiceMonitor applied."
 
 # 6. Resolve access URLs

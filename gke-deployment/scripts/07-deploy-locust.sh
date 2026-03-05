@@ -48,8 +48,11 @@ docker push "${IMAGE_TAG}"
 echo "==> Applying Kubernetes manifests..."
 
 # The basic resources
-kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/namespace.yaml"
-kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/configmap.yaml"
+kubectl create namespace locust --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap locust-config \
+    --namespace=locust \
+    --from-env-file="${SCRIPT_DIR}/../k8s/locust/locust-config.env" \
+    --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/service-master.yaml"
 
 # Master and workers: dynamically replace the generic PROJECT_ID in the YAML
@@ -58,7 +61,13 @@ sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/../k8s/locust/deployment-worke
 
 # Monitoring manifests (won't hurt to re-apply if 05-monitoring.sh already did)
 kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/service-monitor.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping service-monitor"
-kubectl apply -n monitoring -f "${SCRIPT_DIR}/../k8s/monitoring/locust-dashboard-cm.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping dashboard configmap"
+kubectl create configmap locust-dashboard \
+    --namespace=monitoring \
+    --from-file=locust-dashboard.json="${SCRIPT_DIR}/../k8s/monitoring/locust-dashboard.json" \
+    --dry-run=client -o yaml | \
+kubectl label --local -f - grafana_dashboard=1 -o yaml | \
+kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \
+kubectl apply -f - 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping dashboard configmap"
 
 echo ""
 echo "==========================================================================="
