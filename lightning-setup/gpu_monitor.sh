@@ -19,6 +19,13 @@
 # Output files:
 #   <prefix>_gpu_metrics.csv     — nvidia-smi data (GPU util, VRAM, power, temp)
 #   <prefix>_vllm_metrics.csv    — vLLM /metrics data (KV cache, queue, throughput)
+#
+# Metric names (vLLM ≥ 0.8.x / V1 engine):
+#   vllm:num_requests_running{...}    — gauge
+#   vllm:num_requests_waiting{...}    — gauge
+#   vllm:kv_cache_usage_perc{...}     — gauge (0-1 fraction)
+#   vllm:prompt_tokens_total{...}     — counter (delta/interval → tok/s)
+#   vllm:generation_tokens_total{...} — counter (delta/interval → tok/s)
 # =============================================================================
 set -euo pipefail
 
@@ -79,44 +86,59 @@ poll_vllm() {
   local metrics_url="http://localhost:${port}/metrics"
 
   # Write CSV header
-  echo "timestamp,num_requests_running,num_requests_waiting,gpu_cache_usage_pct,cpu_cache_usage_pct,avg_prompt_throughput_toks_per_s,avg_generation_throughput_toks_per_s" \
+  echo "timestamp,num_requests_running,num_requests_waiting,gpu_cache_usage_pct,avg_prompt_throughput_toks_per_s,avg_generation_throughput_toks_per_s" \
     > "${out_file}"
+
+  # Track previous counter values for throughput calculation
+  local prev_prompt_tokens=""
+  local prev_gen_tokens=""
+  local prev_time=""
 
   while true; do
     local ts
     ts=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local now_epoch
+    now_epoch=$(date +%s.%N 2>/dev/null || date +%s)
 
     # Fetch metrics from vLLM (Prometheus text exposition format)
     local raw
     raw=$(curl -sf "${metrics_url}" 2>/dev/null || echo "")
 
     if [[ -z "${raw}" ]]; then
-      echo "${ts},,,,,,," >> "${out_file}"
+      echo "${ts},,,,,," >> "${out_file}"
       sleep "${interval}"
       continue
     fi
 
     # Parse specific metrics from Prometheus text format
-    # Each metric line looks like: metric_name{labels} value
-    # or: metric_name value
-    local requests_running requests_waiting gpu_cache cpu_cache prompt_tput gen_tput
+    # Metric lines have labels: vllm:metric_name{engine="0",...} value
+    local requests_running requests_waiting gpu_cache prompt_tokens gen_tokens
 
-    requests_running=$(echo "${raw}" | grep -E '^vllm:num_requests_running\b' | grep -v '^#' | awk '{print $NF}' | tail -1)
-    requests_waiting=$(echo "${raw}" | grep -E '^vllm:num_requests_waiting\b' | grep -v '^#' | awk '{print $NF}' | tail -1)
-    gpu_cache=$(echo "${raw}" | grep -E '^vllm:gpu_cache_usage_perc\b' | grep -v '^#' | awk '{print $NF}' | tail -1)
-    cpu_cache=$(echo "${raw}" | grep -E '^vllm:cpu_cache_usage_perc\b' | grep -v '^#' | awk '{print $NF}' | tail -1)
-    prompt_tput=$(echo "${raw}" | grep -E '^vllm:avg_prompt_throughput_toks_per_s\b' | grep -v '^#' | awk '{print $NF}' | tail -1)
-    gen_tput=$(echo "${raw}" | grep -E '^vllm:avg_generation_throughput_toks_per_s\b' | grep -v '^#' | awk '{print $NF}' | tail -1)
+    requests_running=$(echo "${raw}" | grep '^vllm:num_requests_running' | grep -v '^#' | awk '{print $NF}' | tail -1)
+    requests_waiting=$(echo "${raw}" | grep '^vllm:num_requests_waiting' | grep -v '^#' | awk '{print $NF}' | tail -1)
+    gpu_cache=$(echo "${raw}" | grep '^vllm:kv_cache_usage_perc' | grep -v '^#' | awk '{print $NF}' | tail -1)
+
+    # Throughput: compute from counter deltas (prompt_tokens_total, generation_tokens_total)
+    prompt_tokens=$(echo "${raw}" | grep '^vllm:prompt_tokens_total' | grep -v '^#' | awk '{print $NF}' | tail -1)
+    gen_tokens=$(echo "${raw}" | grep '^vllm:generation_tokens_total' | grep -v '^#' | awk '{print $NF}' | tail -1)
 
     # Convert gpu_cache from 0-1 fraction to percentage
     if [[ -n "${gpu_cache}" ]]; then
       gpu_cache=$(awk "BEGIN {printf \"%.2f\", ${gpu_cache} * 100}")
     fi
-    if [[ -n "${cpu_cache}" ]]; then
-      cpu_cache=$(awk "BEGIN {printf \"%.2f\", ${cpu_cache} * 100}")
+
+    # Calculate throughput as delta tokens / delta time
+    local prompt_tput="" gen_tput=""
+    if [[ -n "${prev_prompt_tokens}" && -n "${prompt_tokens}" && -n "${prev_time}" ]]; then
+      prompt_tput=$(awk "BEGIN {dt=${now_epoch}-${prev_time}; if(dt>0) printf \"%.1f\", (${prompt_tokens}-${prev_prompt_tokens})/dt; else print 0}")
+      gen_tput=$(awk "BEGIN {dt=${now_epoch}-${prev_time}; if(dt>0) printf \"%.1f\", (${gen_tokens:-0}-${prev_gen_tokens:-0})/dt; else print 0}")
     fi
 
-    echo "${ts},${requests_running:-},${requests_waiting:-},${gpu_cache:-},${cpu_cache:-},${prompt_tput:-},${gen_tput:-}" \
+    prev_prompt_tokens="${prompt_tokens}"
+    prev_gen_tokens="${gen_tokens}"
+    prev_time="${now_epoch}"
+
+    echo "${ts},${requests_running:-},${requests_waiting:-},${gpu_cache:-},${prompt_tput:-},${gen_tput:-}" \
       >> "${out_file}"
 
     sleep "${interval}"
