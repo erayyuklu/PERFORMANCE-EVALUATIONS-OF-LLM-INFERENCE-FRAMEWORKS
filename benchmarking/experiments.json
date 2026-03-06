@@ -1,56 +1,56 @@
 [
   {
     "name": "baseline",
-    "description": "Default vLLM settings — no modifications. Establishes the performance baseline.",
-    "vllm_extra_args": "",
+    "description": "Bare vLLM: chunked prefill OFF, prefix caching OFF. Pure performance baseline with no optimizations.",
+    "vllm_extra_args": "--no-enable-chunked-prefill --no-enable-prefix-caching",
     "concurrency": [1, 4, 8],
     "prompt_categories": ["all"]
   },
   {
     "name": "max_seqs_8",
-    "description": "Reduce max-num-seqs to 8. Limits concurrency to reduce queuing under low traffic.",
-    "vllm_extra_args": "--max-num-seqs 8",
+    "description": "Reduce max-num-seqs to 8 (default=128). Limits batch size to reduce per-request latency under load.",
+    "vllm_extra_args": "--max-num-seqs 8 --no-enable-chunked-prefill --no-enable-prefix-caching",
     "concurrency": [1, 4, 8],
     "prompt_categories": ["all"]
   },
   {
     "name": "max_seqs_32",
-    "description": "Increase max-num-seqs to 32. Higher throughput under heavy concurrency at cost of latency.",
-    "vllm_extra_args": "--max-num-seqs 32",
+    "description": "Set max-num-seqs to 32 (default=128). Moderate batching for balanced throughput/latency.",
+    "vllm_extra_args": "--max-num-seqs 32 --no-enable-chunked-prefill --no-enable-prefix-caching",
     "concurrency": [1, 8, 32],
     "prompt_categories": ["all"]
   },
   {
-    "name": "gpu_mem_70",
-    "description": "Lower gpu-memory-utilization to 0.70. Leaves headroom for model activations.",
-    "vllm_extra_args": "--gpu-memory-utilization 0.70",
+    "name": "gpu_mem_80",
+    "description": "Lower gpu-memory-utilization to 0.80 (default=0.90). Fewer KV cache blocks, more headroom.",
+    "vllm_extra_args": "--gpu-memory-utilization 0.80 --no-enable-chunked-prefill --no-enable-prefix-caching",
     "concurrency": [1, 4, 8],
     "prompt_categories": ["all"]
   },
   {
     "name": "gpu_mem_95",
-    "description": "Push gpu-memory-utilization to 0.95. Maximizes KV cache blocks at risk of OOM.",
-    "vllm_extra_args": "--gpu-memory-utilization 0.95",
+    "description": "Push gpu-memory-utilization to 0.95. Maximizes KV cache blocks at the risk of OOM under pressure.",
+    "vllm_extra_args": "--gpu-memory-utilization 0.95 --no-enable-chunked-prefill --no-enable-prefix-caching",
     "concurrency": [1, 4, 8, 16],
     "prompt_categories": ["all"]
   },
   {
-    "name": "chunked_prefill_on",
-    "description": "Enable chunked prefill. Splits long prompts to reduce TTFT jitter under concurrency.",
-    "vllm_extra_args": "--enable-chunked-prefill",
+    "name": "chunked_prefill",
+    "description": "Enable chunked prefill only. Interleaves prefill chunks with decode steps to reduce TTFT jitter under concurrency.",
+    "vllm_extra_args": "--enable-chunked-prefill --no-enable-prefix-caching",
     "concurrency": [1, 4, 8],
     "prompt_categories": ["all"]
   },
   {
     "name": "prefix_caching",
-    "description": "Enable automatic prefix caching. Benefits workloads with shared prompt prefixes.",
-    "vllm_extra_args": "--enable-prefix-caching",
+    "description": "Enable automatic prefix caching only. Reuses KV cache blocks across requests sharing common prefixes.",
+    "vllm_extra_args": "--no-enable-chunked-prefill --enable-prefix-caching",
     "concurrency": [1, 4, 8],
     "prompt_categories": ["all"]
   },
   {
     "name": "chunked_prefill_plus_prefix_cache",
-    "description": "Combined: chunked prefill + prefix caching. Expected best latency for long prompts with concurrency.",
+    "description": "Both chunked prefill + prefix caching ON (vLLM v0.16 default config). Expected best overall configuration.",
     "vllm_extra_args": "--enable-chunked-prefill --enable-prefix-caching",
     "concurrency": [1, 4, 8, 16],
     "prompt_categories": ["all"]

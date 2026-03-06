@@ -1,0 +1,13 @@
+{
+  "name": "chunked_prefill_on",
+  "description": "Enable chunked prefill. Splits long prompts to reduce TTFT jitter under concurrency.",
+  "vllm_extra_args": "--enable-chunked-prefill",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

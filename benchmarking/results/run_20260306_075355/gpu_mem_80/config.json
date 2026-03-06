@@ -1,0 +1,13 @@
+{
+  "name": "gpu_mem_80",
+  "description": "Lower gpu-memory-utilization to 0.80. Leaves headroom for model activations.",
+  "vllm_extra_args": "--gpu-memory-utilization 0.80",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

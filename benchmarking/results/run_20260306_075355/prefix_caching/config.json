@@ -1,0 +1,13 @@
+{
+  "name": "prefix_caching",
+  "description": "Enable automatic prefix caching. Benefits workloads with shared prompt prefixes.",
+  "vllm_extra_args": "--enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}
