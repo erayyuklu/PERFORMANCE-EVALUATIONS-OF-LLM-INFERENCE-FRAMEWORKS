@@ -35,6 +35,8 @@ VLLM_HOST="http://localhost:${PORT}"
 RESULTS_BASE="${BENCHMARK_DIR}/results"
 LOCUST_RUN_TIME="${LOCUST_RUN_TIME:-90s}"
 GPU_MONITOR_INTERVAL=2                          # seconds between GPU polls
+OUTPUT_DIR=""                                   # if set, reuse this run dir
+SKIP_EXISTING=false                              # skip experiments with results
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -46,6 +48,8 @@ while [[ $# -gt 0 ]]; do
     --host)              VLLM_HOST="$2";              shift 2 ;;
     --run-time)          LOCUST_RUN_TIME="$2";        shift 2 ;;
     --monitor-interval)  GPU_MONITOR_INTERVAL="$2";   shift 2 ;;
+    --output-dir)        OUTPUT_DIR="$2";            shift 2 ;;
+    --skip-existing)     SKIP_EXISTING=true;           shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -166,8 +170,13 @@ fi
 # ---------------------------------------------------------------------------
 # Main experiment loop
 # ---------------------------------------------------------------------------
-RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="${RESULTS_BASE}/${RUN_ID}"
+if [[ -n "${OUTPUT_DIR}" ]]; then
+  RUN_DIR="${OUTPUT_DIR}"
+  RUN_ID="$(basename "${RUN_DIR}")"
+else
+  RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
+  RUN_DIR="${RESULTS_BASE}/${RUN_ID}"
+fi
 mkdir -p "${RUN_DIR}"
 
 log "Run ID: ${RUN_ID}"
@@ -200,15 +209,32 @@ for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   EXP_DIR="${RUN_DIR}/${exp_name}"
   mkdir -p "${EXP_DIR}"
 
+  # Skip if results already exist and --skip-existing is set
+  if [[ "${SKIP_EXISTING}" == "true" ]]; then
+    existing_csvs=$(find "${EXP_DIR}" -name '*_custom_metrics.csv' -size +0c 2>/dev/null | wc -l)
+    expected_csvs=$(echo "${exp}" | jq '[.concurrency[], .prompt_categories[]] | length / 2' | bc 2>/dev/null || echo 0)
+    if [[ ${existing_csvs} -gt 0 ]]; then
+      log "Skipping ${exp_name} — already has ${existing_csvs} result(s) (--skip-existing)"
+      continue
+    fi
+  fi
+
   # Save experiment config
   echo "${exp}" | jq '.' > "${EXP_DIR}/config.json"
 
   # Restart vLLM with new args (or start if not running)
   if [[ -n "${extra_args}" ]]; then
-    restart_vllm "${extra_args}"
+    if ! restart_vllm "${extra_args}"; then
+      log "⚠ vLLM failed to start for ${exp_name} — skipping this experiment."
+      info "Check /tmp/vllm_serve.log for details."
+      continue
+    fi
   else
     log "No extra args — using default vLLM config."
-    bash "${SCRIPT_DIR}/serve.sh" start
+    if ! bash "${SCRIPT_DIR}/serve.sh" start; then
+      log "⚠ vLLM failed to start for ${exp_name} — skipping this experiment."
+      continue
+    fi
   fi
 
   for prompt_cat in ${prompt_categories}; do

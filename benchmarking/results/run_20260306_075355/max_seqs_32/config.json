@@ -1,0 +1,13 @@
+{
+  "name": "max_seqs_32",
+  "description": "Increase max-num-seqs to 32. Higher throughput under heavy concurrency at cost of latency.",
+  "vllm_extra_args": "--max-num-seqs 32",
+  "concurrency": [
+    1,
+    8,
+    32
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}
