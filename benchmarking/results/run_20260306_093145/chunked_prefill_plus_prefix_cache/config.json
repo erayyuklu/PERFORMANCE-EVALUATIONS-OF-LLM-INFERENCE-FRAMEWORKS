@@ -1,0 +1,14 @@
+{
+  "name": "chunked_prefill_plus_prefix_cache",
+  "description": "Both chunked prefill + prefix caching ON (vLLM v0.16 default config). Expected best overall configuration.",
+  "vllm_extra_args": "--enable-chunked-prefill --enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8,
+    16
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

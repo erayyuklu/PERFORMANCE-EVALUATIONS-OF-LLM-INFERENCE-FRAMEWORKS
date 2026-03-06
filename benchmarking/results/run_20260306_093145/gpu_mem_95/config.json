@@ -1,0 +1,14 @@
+{
+  "name": "gpu_mem_95",
+  "description": "Push gpu-memory-utilization to 0.95. Maximizes KV cache blocks at the risk of OOM under pressure.",
+  "vllm_extra_args": "--gpu-memory-utilization 0.95 --no-enable-chunked-prefill --no-enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8,
+    16
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

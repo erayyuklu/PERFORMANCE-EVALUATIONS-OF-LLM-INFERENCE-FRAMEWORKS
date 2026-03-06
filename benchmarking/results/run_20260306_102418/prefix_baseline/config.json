@@ -1,0 +1,14 @@
+{
+  "name": "prefix_baseline",
+  "description": "Shared-prefix dataset, prefix caching OFF. Control group for measuring prefix caching benefit.",
+  "vllm_extra_args": "--no-enable-chunked-prefill --no-enable-prefix-caching",
+  "dataset": "prompts/prefix_dataset.json",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}
