@@ -9,6 +9,7 @@ spec:
   replicas: 1
   strategy:
     type: Recreate
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels:
       app: vllm-server
@@ -87,11 +88,19 @@ spec:
               cpu: "6"
               memory: "24Gi"
               nvidia.com/gpu: "1"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 240
+            initialDelaySeconds: 0
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
@@ -99,7 +108,7 @@ spec:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 240
+            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3

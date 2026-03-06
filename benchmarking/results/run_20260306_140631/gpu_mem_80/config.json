@@ -1,0 +1,13 @@
+{
+  "name": "gpu_mem_80",
+  "description": "Lower gpu-memory-utilization to 0.80 (default=0.90). Fewer KV cache blocks, more headroom.",
+  "vllm_extra_args": "--gpu-memory-utilization 0.80 --no-enable-chunked-prefill --no-enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

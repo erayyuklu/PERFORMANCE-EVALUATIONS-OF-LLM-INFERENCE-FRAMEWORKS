@@ -112,7 +112,7 @@ wait_for_deployment() {
   log "Waiting for deployment '${DEPLOYMENT_NAME}' to be ready..."
   kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
     -n "${NAMESPACE}" \
-    --timeout=600s
+    --timeout=1200s
   log "Deployment is ready."
 }
 

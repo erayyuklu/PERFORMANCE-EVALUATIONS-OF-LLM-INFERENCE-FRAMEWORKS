@@ -3,7 +3,7 @@
     "name": "baseline",
     "description": "Bare vLLM: chunked prefill OFF, prefix caching OFF. Pure performance baseline with no optimizations.",
     "vllm_extra_args": "--no-enable-chunked-prefill --no-enable-prefix-caching",
-    "concurrency": [1, 4, 8],
+    "concurrency": [1, 4, 8, 128, 256, 512],
     "prompt_categories": ["all"]
   },
   {

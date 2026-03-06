@@ -1,0 +1,13 @@
+{
+  "name": "max_seqs_8",
+  "description": "Reduce max-num-seqs to 8 (default=128). Limits batch size to reduce per-request latency under load.",
+  "vllm_extra_args": "--max-num-seqs 8 --no-enable-chunked-prefill --no-enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

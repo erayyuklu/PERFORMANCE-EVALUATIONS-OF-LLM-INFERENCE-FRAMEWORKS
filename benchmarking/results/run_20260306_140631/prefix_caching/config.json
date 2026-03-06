@@ -1,0 +1,13 @@
+{
+  "name": "prefix_caching",
+  "description": "Enable automatic prefix caching only. Reuses KV cache blocks across requests sharing common prefixes.",
+  "vllm_extra_args": "--no-enable-chunked-prefill --enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

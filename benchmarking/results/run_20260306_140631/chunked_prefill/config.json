@@ -1,0 +1,13 @@
+{
+  "name": "chunked_prefill",
+  "description": "Enable chunked prefill only. Interleaves prefill chunks with decode steps to reduce TTFT jitter under concurrency.",
+  "vllm_extra_args": "--enable-chunked-prefill --no-enable-prefix-caching",
+  "concurrency": [
+    1,
+    4,
+    8
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}
