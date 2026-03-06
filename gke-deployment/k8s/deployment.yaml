@@ -2,10 +2,13 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllm-server
+  namespace: vllm
   labels:
     app: vllm-server
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: vllm-server

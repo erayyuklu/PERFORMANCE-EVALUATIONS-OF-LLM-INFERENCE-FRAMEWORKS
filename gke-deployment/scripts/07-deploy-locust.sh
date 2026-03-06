@@ -59,8 +59,16 @@ kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/service-master.yaml"
 sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/../k8s/locust/deployment-master.yaml" | kubectl apply -f -
 sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/../k8s/locust/deployment-worker.yaml" | kubectl apply -f -
 
+# Force pods to pull the newly pushed :latest image
+echo "==> Rolling out new image..."
+kubectl rollout restart deployment/locust-master -n locust
+kubectl rollout restart deployment/locust-worker -n locust
+kubectl rollout status deployment/locust-master -n locust --timeout=120s
+kubectl rollout status deployment/locust-worker -n locust --timeout=120s
+
 # Monitoring manifests (won't hurt to re-apply if 05-monitoring.sh already did)
 kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/service-monitor.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping service-monitor"
+kubectl delete configmap locust-dashboard --namespace=monitoring --ignore-not-found 2>/dev/null || true
 kubectl create configmap locust-dashboard \
     --namespace=monitoring \
     --from-file=locust-dashboard.json="${SCRIPT_DIR}/../k8s/monitoring/locust-dashboard.json" \
@@ -68,6 +76,7 @@ kubectl create configmap locust-dashboard \
 kubectl label --local -f - grafana_dashboard=1 -o yaml | \
 kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \
 kubectl apply -f - 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping dashboard configmap"
+kubectl rollout restart deployment -n monitoring -l app.kubernetes.io/name=grafana 2>/dev/null || echo "    ⚠ Grafana not found, skipping restart"
 
 echo ""
 echo "==========================================================================="

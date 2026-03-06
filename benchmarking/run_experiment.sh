@@ -30,7 +30,7 @@ EXPERIMENT_NAME=""                              # if set, run only this experime
 VLLM_HOST="http://localhost:8000"
 RESULTS_BASE="${SCRIPT_DIR}/results"
 NAMESPACE="${K8S_NAMESPACE:-vllm}"
-DEPLOYMENT_NAME="vllm"
+DEPLOYMENT_NAME="vllm-server"
 LOCUST_RUN_TIME="${LOCUST_RUN_TIME:-120s}"     # how long each Locust run lasts
 WARMUP_REQUESTS=5                               # requests to warm up before recording
 PORT_FORWARD_PID=""
@@ -112,20 +112,34 @@ wait_for_deployment() {
   log "Waiting for deployment '${DEPLOYMENT_NAME}' to be ready..."
   kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
     -n "${NAMESPACE}" \
-    --timeout=300s
+    --timeout=600s
   log "Deployment is ready."
 }
 
 patch_vllm_args() {
   local extra_args="$1"
   log "Patching vLLM deployment with args: ${extra_args}"
-  # We store vLLM args in the k8s ConfigMap config.json's 'args' key.
-  # Here we patch the deployment's container args directly for simplicity.
-  # Each experiment specifies the full --served-model-name + parameter flags.
-  kubectl set env deployment/"${DEPLOYMENT_NAME}" \
+
+  # Base args mirroring deployment.yaml (each flag and value as separate elements)
+  local base_args='["--model","$(MODEL)","--max-model-len","$(MAX_MODEL_LEN)","--gpu-memory-utilization","$(GPU_MEMORY_UTILIZATION)","--dtype","$(DTYPE)","--tensor-parallel-size","$(TENSOR_PARALLEL_SIZE)","--port","$(PORT)"]'
+
+  # Split extra_args into individual tokens and build a JSON array
+  local extra_json="[]"
+  if [[ -n "${extra_args}" ]]; then
+    local extra_array=()
+    read -ra extra_array <<< "${extra_args}"
+    extra_json=$(printf '%s\n' "${extra_array[@]}" | jq -R . | jq -s .)
+  fi
+
+  # Merge base + extra args and patch the container args directly
+  local merged_args
+  merged_args=$(jq -n --argjson base "${base_args}" --argjson extra "${extra_json}" '$base + $extra')
+
+  kubectl patch deployment/"${DEPLOYMENT_NAME}" \
     -n "${NAMESPACE}" \
-    VLLM_EXTRA_ARGS="${extra_args}" \
-    --record=false 2>/dev/null || true
+    --type=json \
+    -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":${merged_args}}]"
+
   kubectl rollout restart deployment/"${DEPLOYMENT_NAME}" -n "${NAMESPACE}"
   sleep 3
   wait_for_deployment

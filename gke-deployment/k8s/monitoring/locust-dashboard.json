@@ -11,24 +11,13 @@
     {
       "id": 1,
       "title": "Active Users",
-      "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 50 }
-            ]
-          },
-          "unit": "none"
-        }
+        "defaults": { "unit": "none", "custom": { "lineWidth": 2 } }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "background" },
+      "options": { "tooltip": { "mode": "multi" } },
       "targets": [
         { "expr": "locust_users", "legendFormat": "Users" }
       ]
@@ -37,24 +26,13 @@
     {
       "id": 2,
       "title": "Failure Rate",
-      "type": "stat",
-      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.05 }
-            ]
-          }
-        }
+        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 2 } }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "background" },
+      "options": { "tooltip": { "mode": "multi" } },
       "targets": [
         { "expr": "locust_fail_ratio", "legendFormat": "Failure Ratio" }
       ]
@@ -63,26 +41,18 @@
     {
       "id": 3,
       "title": "Requests Per Second (RPS)",
-      "type": "stat",
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 200 }
-            ]
-          }
-        }
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "background" },
+      "options": { "tooltip": { "mode": "multi" } },
       "targets": [
-        { "expr": "locust_requests_per_second", "legendFormat": "RPS" }
+        {
+          "expr": "sum(rate(locust_requests_total[1m])) by (result)",
+          "legendFormat": "{{result}}"
+        }
       ]
     },
 
@@ -90,7 +60,7 @@
       "id": 4,
       "title": "vLLM - Time to First Token (TTFT) p50 / p95 / p99 (ms)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
@@ -116,7 +86,7 @@
       "id": 5,
       "title": "vLLM - Inter-Token Latency p50 / p95 / p99 (ms)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
@@ -142,7 +112,7 @@
       "id": 6,
       "title": "vLLM - E2E Request Latency p50 / p95 / p99 (ms)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
@@ -168,7 +138,7 @@
       "id": 7,
       "title": "vLLM - Time Per Output Token (TPOT) p50 / p95 / p99 (ms/token)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
@@ -194,7 +164,7 @@
       "id": 8,
       "title": "vLLM - Prompt Tokens Throughput (tokens/s)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 20, "w": 8, "h": 8 },
+      "gridPos": { "x": 0, "y": 24, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
@@ -212,7 +182,7 @@
       "id": 9,
       "title": "vLLM - Generation Tokens Throughput (tokens/s)",
       "type": "timeseries",
-      "gridPos": { "x": 8, "y": 20, "w": 8, "h": 8 },
+      "gridPos": { "x": 8, "y": 24, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
@@ -230,7 +200,7 @@
       "id": 10,
       "title": "vLLM - Request Success Rate (req/s)",
       "type": "timeseries",
-      "gridPos": { "x": 16, "y": 20, "w": 8, "h": 8 },
+      "gridPos": { "x": 16, "y": 24, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } }
@@ -248,7 +218,7 @@
       "id": 11,
       "title": "vLLM - Running & Waiting Requests",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "none", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
@@ -270,7 +240,7 @@
       "id": 12,
       "title": "vLLM - KV-Cache Utilization (%)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -302,7 +272,7 @@
       "id": 13,
       "title": "vLLM - Preemptions (events/s)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 40, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
@@ -320,7 +290,7 @@
       "id": 14,
       "title": "vLLM - Prefix Cache Hits & Queries",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 36, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 40, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
@@ -342,7 +312,7 @@
       "id": 15,
       "title": "GPU Utilization - DCGM_FI_DEV_GPU_UTIL (%)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 48, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -374,7 +344,7 @@
       "id": 16,
       "title": "GPU Framebuffer Memory Used - DCGM_FI_DEV_FB_USED (MiB)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 48, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "decmbytes", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
@@ -392,7 +362,7 @@
       "id": 17,
       "title": "Container CPU Usage (cores)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 52, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 56, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
@@ -410,7 +380,7 @@
       "id": 18,
       "title": "Container Memory Working Set (bytes)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 52, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 56, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "bytes", "custom": { "lineWidth": 2 } }
@@ -428,7 +398,7 @@
       "id": 19,
       "title": "Container Network I/O (bytes/s)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 60, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 64, "w": 24, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "Bps", "custom": { "lineWidth": 2 } }
