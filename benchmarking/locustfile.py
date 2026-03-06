@@ -170,9 +170,16 @@ class VllmUser(HttpUser):
         prompt_text  = prompt_entry["prompt"]
         category     = prompt_entry.get("category", "unknown")
 
+        # Build messages — include system_prompt if present in dataset
+        messages = []
+        system_prompt = prompt_entry.get("system_prompt", "")
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt_text})
+
         payload = {
             "model": MODEL_NAME,
-            "messages": [{"role": "user", "content": prompt_text}],
+            "messages": messages,
             "max_tokens": MAX_TOKENS,
             "stream": True,
             "temperature": 0.0,   # deterministic for reproducibility

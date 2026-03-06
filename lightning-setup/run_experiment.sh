@@ -37,6 +37,7 @@ LOCUST_RUN_TIME="${LOCUST_RUN_TIME:-90s}"
 GPU_MONITOR_INTERVAL=2                          # seconds between GPU polls
 OUTPUT_DIR=""                                   # if set, reuse this run dir
 SKIP_EXISTING=false                              # skip experiments with results
+DATASET_OVERRIDE=""                              # global dataset path override
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -50,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --monitor-interval)  GPU_MONITOR_INTERVAL="$2";   shift 2 ;;
     --output-dir)        OUTPUT_DIR="$2";            shift 2 ;;
     --skip-existing)     SKIP_EXISTING=true;           shift ;;
+    --dataset)           DATASET_OVERRIDE="$2";       shift 2 ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -84,7 +86,15 @@ run_locust() {
   local out_csv="$3"
   local prompt_len="${4:-all}"
 
+  local dataset="${5:-}"
+
   log "Running Locust: users=${users}, prompt_len=${prompt_len}, label=${label}"
+  if [[ -n "${dataset}" ]]; then
+    info "Dataset: ${dataset}"
+    export VLLM_DATASET="${dataset}"
+  else
+    unset VLLM_DATASET 2>/dev/null || true
+  fi
   VLLM_PROMPT_LEN="${prompt_len}" \
   CUSTOM_CSV_PREFIX="${out_csv}" \
   locust \
@@ -250,7 +260,16 @@ for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
       start_gpu_monitor "${out_prefix}"
 
       # 2) Run Locust load test (blocking)
-      run_locust "${users}" "${label}" "${out_prefix}" "${prompt_cat}"
+      # Resolve dataset: per-experiment > global override > default
+      dataset_path=""
+      exp_dataset=$(echo "${exp}" | jq -r '.dataset // ""')
+      if [[ -n "${exp_dataset}" ]]; then
+        dataset_path="${BENCHMARK_DIR}/${exp_dataset}"
+      elif [[ -n "${DATASET_OVERRIDE}" ]]; then
+        dataset_path="${DATASET_OVERRIDE}"
+      fi
+
+      run_locust "${users}" "${label}" "${out_prefix}" "${prompt_cat}" "${dataset_path}"
 
       # 3) Stop GPU monitoring
       stop_gpu_monitor

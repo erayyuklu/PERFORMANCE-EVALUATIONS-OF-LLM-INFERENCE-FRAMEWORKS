@@ -72,12 +72,18 @@ cmd_start() {
     echo "    Extra:  ${extra_args[*]}"
   fi
 
+  # Build CLI args — skip defaults that are overridden by extra_args
+  local cli_args=()
+  cli_args+=(--port "${PORT}")
+
+  local extra_str="${extra_args[*]:-}"
+  [[ "${extra_str}" != *"--max-model-len"* ]]           && cli_args+=(--max-model-len "${MAX_MODEL_LEN}")
+  [[ "${extra_str}" != *"--gpu-memory-utilization"* ]]   && cli_args+=(--gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}")
+  [[ "${extra_str}" != *"--dtype"* ]]                    && cli_args+=(--dtype "${DTYPE}")
+  [[ "${extra_str}" != *"--tensor-parallel-size"* ]]     && cli_args+=(--tensor-parallel-size "${TENSOR_PARALLEL_SIZE}")
+
   nohup vllm serve "${MODEL}" \
-    --port "${PORT}" \
-    --max-model-len "${MAX_MODEL_LEN}" \
-    --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
-    --dtype "${DTYPE}" \
-    --tensor-parallel-size "${TENSOR_PARALLEL_SIZE}" \
+    "${cli_args[@]}" \
     "${extra_args[@]}" \
     > "${VLLM_LOG_FILE}" 2>&1 &
 
