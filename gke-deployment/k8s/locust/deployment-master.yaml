@@ -46,6 +46,8 @@ spec:
             - "--master"
             - "-f"
             - "/locust/locustfile.py"
+            - "--csv=/tmp/locust"
+            - "--csv-full-history"
           ports:
             - name: web
               containerPort: 8089
@@ -71,11 +73,36 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: VLLM_MAX_TOKENS
-            - name: VLLM_DATASET
+            - name: VLLM_TEMPERATURE
               valueFrom:
                 configMapKeyRef:
                   name: locust-config
-                  key: VLLM_DATASET
+                  key: VLLM_TEMPERATURE
+            - name: VLLM_REQUEST_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_REQUEST_TIMEOUT
+            - name: DATASET_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: DATASET_TYPE
+            - name: SHAREGPT_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: SHAREGPT_PATH
+            - name: SHAREGPT_MIN_TURNS
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: SHAREGPT_MIN_TURNS
+            - name: CUSTOM_DATASET_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: CUSTOM_DATASET_PATH
             - name: VLLM_PROMPT_LEN
               valueFrom:
                 configMapKeyRef:
@@ -90,9 +117,6 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
-            limits:
-              cpu: "1"
-              memory: "512Mi"
           readinessProbe:
             httpGet:
               path: /

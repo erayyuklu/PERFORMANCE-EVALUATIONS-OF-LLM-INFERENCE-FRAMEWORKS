@@ -1,42 +1,37 @@
 #!/usr/bin/env bash
 # =============================================================================
-# run_experiment.sh — Repeatable vLLM benchmark experiment runner
+# run_experiment.sh — Repeatable vLLM benchmark experiment runner (in-cluster)
 #
 # Usage:
-#   ./run_experiment.sh [--experiment-file experiments.json] [--host http://...]
-#                       [--experiment <name>] [--external] [--in-cluster]
+#   ./run_experiment.sh [--experiment-file experiments.json]
+#                       [--experiment <name>] [--run-time <duration>]
+#                       [--dry-run]
 #
 # What this script does for each experiment configuration:
 #   1. Patch the vLLM Kubernetes deployment with the new parameters
 #   2. Wait for the deployment to become ready
-#   3. Port-forward the vLLM service to localhost (or use external/in-cluster mechanism)
+#   3. Trigger load test via the in-cluster Locust master REST API
 #   4. Run Locust for each concurrency level (users)
-#      (If --in-cluster: triggers test via Locust master REST API instead of local process)
 #   5. Save all results under results/<run_id>/
-#   6. Tear down port-forward
 #
-# Requires: kubectl, locust (pip install locust), jq
+# Requires: kubectl, jq, curl
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../gke-deployment/config.env"
+source "${SCRIPT_DIR}/config.env"
 
 # ---------------------------------------------------------------------------
-# Defaults (override via CLI flags)
+# Script-internal state (configurable parameters live in config.env)
 # ---------------------------------------------------------------------------
-EXPERIMENT_FILE="${SCRIPT_DIR}/experiments.json"
+EXPERIMENT_FILE="${EXPERIMENT_FILE:-${SCRIPT_DIR}/experiments.json}"
 EXPERIMENT_NAME=""                              # if set, run only this experiment
-VLLM_HOST="http://localhost:8000"
 RESULTS_BASE="${SCRIPT_DIR}/results"
 NAMESPACE="${K8S_NAMESPACE:-vllm}"
 DEPLOYMENT_NAME="vllm-server"
-LOCUST_RUN_TIME="${LOCUST_RUN_TIME:-120s}"     # how long each Locust run lasts
-WARMUP_REQUESTS=5                               # requests to warm up before recording
 PORT_FORWARD_PID=""
-USE_EXTERNAL_IP=false                           # set to true via --external flag
-USE_IN_CLUSTER=false                            # set to true via --in-cluster flag
-LOCUST_MASTER_URL="http://localhost:8089"       # URL for Locust master (used with --in-cluster)
+DRY_RUN=false
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -45,10 +40,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --experiment-file) EXPERIMENT_FILE="$2";   shift 2 ;;
     --experiment)      EXPERIMENT_NAME="$2";   shift 2 ;;
-    --host)            VLLM_HOST="$2";         shift 2 ;;
     --run-time)        LOCUST_RUN_TIME="$2";   shift 2 ;;
-    --external)        USE_EXTERNAL_IP=true;   shift   ;;
-    --in-cluster)      USE_IN_CLUSTER=true;    shift   ;;
+    --dry-run)         DRY_RUN=true;           shift   ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -62,51 +55,10 @@ info() { echo "    $*"; }
 cleanup() {
   if [[ -n "${PORT_FORWARD_PID}" ]]; then
     kill "${PORT_FORWARD_PID}" 2>/dev/null || true
-    log "Port-forward stopped."
+    log "Port-forward to Locust master stopped."
   fi
 }
 trap cleanup EXIT
-
-fetch_external_ip() {
-  log "Fetching external IP of vllm-service..."
-  local ip
-  for attempt in $(seq 1 20); do
-    ip=$(kubectl get svc vllm-service -n "${NAMESPACE}" \
-          -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-    if [[ -n "${ip}" ]]; then
-      VLLM_HOST="http://${ip}:8000"
-      log "External IP resolved: ${VLLM_HOST}"
-      return 0
-    fi
-    info "Waiting for external IP (attempt ${attempt}/20)..."
-    sleep 5
-  done
-  echo "ERROR: Could not resolve external IP for vllm-service after 100 s" >&2
-  exit 1
-}
-
-start_port_forward() {
-  if [[ "${USE_IN_CLUSTER}" == "true" ]]; then
-    log "Starting port-forward to Locust master (locust-master:8089)..."
-    kubectl port-forward svc/locust-master 8089:8089 -n locust &>/dev/null &
-    PORT_FORWARD_PID=$!
-    sleep 4
-    info "Locust Port-forward PID: ${PORT_FORWARD_PID}"
-  else
-    log "Starting port-forward localhost:8000 → vllm service..."
-    kubectl port-forward svc/vllm-service 8000:8000 -n "${NAMESPACE}" &>/dev/null &
-    PORT_FORWARD_PID=$!
-    sleep 4   # give kubectl time to establish the tunnel
-    info "vLLM Port-forward PID: ${PORT_FORWARD_PID}"
-  fi
-}
-
-stop_port_forward() {
-  if [[ -n "${PORT_FORWARD_PID}" ]]; then
-    kill "${PORT_FORWARD_PID}" 2>/dev/null || true
-    PORT_FORWARD_PID=""
-  fi
-}
 
 wait_for_deployment() {
   log "Waiting for deployment '${DEPLOYMENT_NAME}' to be ready..."
@@ -158,8 +110,8 @@ print_grafana_link() {
     total_runs=$(( total_runs + n_users * n_cats ))
   done
 
-  # Expected window: runs × (duration + 5 s cooldown) + 2 min overhead buffer
-  local total_sec=$(( total_runs * (duration_sec + 5) + 120 ))
+  # Expected window: runs × (duration + cooldown) + 2 min overhead buffer
+  local total_sec=$(( total_runs * (duration_sec + COOLDOWN_SEC) + 120 ))
 
   local from_ms to_ms
   from_ms=$(date +%s%3N)                              # epoch milliseconds (GNU date / Linux)
@@ -186,65 +138,97 @@ print_grafana_link() {
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
+# Called ONCE before the main loop to avoid repeating readiness checks per run.
+ensure_locust_ready() {
+  log "Waiting for Locust pods to be ready..."
+  kubectl wait --for=condition=Ready pod -l app=locust \
+    -n "${LOCUST_NAMESPACE}" --timeout=300s
+  info "All Locust pods are Ready."
+
+  # Give workers time to register with master (they connect via ZMQ after pod Ready)
+  info "Waiting 15s for workers to register with master..."
+  sleep 15
+
+  log "Starting port-forward to Locust master (locust-master:8089)..."
+  kubectl port-forward svc/locust-master 8089:8089 -n "${LOCUST_NAMESPACE}" &>/dev/null &
+  PORT_FORWARD_PID=$!
+  info "Locust Port-forward PID: ${PORT_FORWARD_PID}"
+
+  # Verify the port-forward is actually reachable before proceeding
+  local attempt
+  for attempt in $(seq 1 15); do
+    if curl -sf "${LOCUST_MASTER_URL}/" &>/dev/null; then
+      info "Locust master is reachable at ${LOCUST_MASTER_URL}."
+      return 0
+    fi
+    info "Waiting for Locust master to become reachable (attempt ${attempt}/15)..."
+    sleep 2
+  done
+  echo "ERROR: Locust master at ${LOCUST_MASTER_URL} is not reachable after port-forward." >&2
+  exit 1
+}
+
+# Poll until Locust reports state == "running", then return.
+# This ensures the sleep timer starts only after ramp-up is complete.
+wait_for_swarm_running() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    local state
+    state=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
+              | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
+    if [[ "${state}" == "running" ]]; then
+      info "Swarm is running."
+      return 0
+    fi
+    info "Waiting for swarm to reach 'running' state (current: ${state}, attempt ${attempt}/30)..."
+    sleep 2
+  done
+  echo "ERROR: Locust swarm did not reach 'running' state within 60s." >&2
+  exit 1
+}
+
 run_locust() {
   local users="$1"
   local label="$2"
   local out_csv="$3"
-  local prompt_len="${4:-all}"
+  local effective_spawn_rate="${SPAWN_RATE:-${users}}"
 
-  if [[ "${USE_IN_CLUSTER}" == "true" ]]; then
-    log "Triggering in-cluster Locust run (users=${users}, label=${label})..."
+  log "Triggering in-cluster Locust run (users=${users}, spawn_rate=${effective_spawn_rate}, label=${label})..."
 
-    # Ensure all locust pods are Ready before proceeding
-    log "Waiting for Locust pods to be ready..."
-    kubectl wait --for=condition=Ready pod -l app=locust -n locust --timeout=300s
-    info "All Locust pods are Ready."
+  # Trigger run via API — fail immediately on curl error
+  info "Starting swarm: ${users} users at ${effective_spawn_rate} users/s..."
+  curl -sf -X POST "${LOCUST_MASTER_URL}/swarm" \
+    -d "user_count=${users}&spawn_rate=${effective_spawn_rate}" > /dev/null \
+    || { echo "ERROR: Failed to start Locust swarm (POST /swarm)." >&2; exit 1; }
 
-    # Give workers time to register with master (they connect via ZMQ after pod Ready)
-    info "Waiting 15s for workers to register with master..."
-    sleep 15
+  # Poll until ramp-up is complete before starting the timer
+  wait_for_swarm_running
 
-    # Start port-forward to master (only if not already running)
-    if [[ -z "${PORT_FORWARD_PID}" ]]; then
-      log "Starting port-forward to Locust master (locust-master:8089)..."
-      kubectl port-forward svc/locust-master 8089:8089 -n locust &>/dev/null &
-      PORT_FORWARD_PID=$!
-      sleep 4
-      info "Locust Port-forward PID: ${PORT_FORWARD_PID}"
-    fi
+  local duration_sec="${LOCUST_RUN_TIME%s}"
+  info "Sleeping for ${duration_sec}s while cluster-Locust runs..."
+  sleep "${duration_sec}"
 
-    # Trigger run via API
-    info "Starting swarm with ${users} users..."
-    curl -s -X POST "${LOCUST_MASTER_URL}/swarm" \
-      -d "user_count=${users}&spawn_rate=${users}" > /dev/null
-    
-    # Extract duration in seconds to sleep
-    local duration_sec="${LOCUST_RUN_TIME%s}"
-    info "Sleeping for ${duration_sec}s while cluster-Locust runs..."
-    sleep "${duration_sec}"
-    
-    # Stop the swarm
-    curl -s -X GET "${LOCUST_MASTER_URL}/stop" > /dev/null
-    info "Stopped Locust swarm."
-    
-    # Download stats CSV from master
-    curl -s -X GET "${LOCUST_MASTER_URL}/stats/requests/csv" -o "${out_csv}_stats.csv"
-    info "Downloaded summary CSV to ${out_csv}_stats.csv"
+  # Stop the swarm
+  curl -sf -X GET "${LOCUST_MASTER_URL}/stop" > /dev/null \
+    || { echo "ERROR: Failed to stop Locust swarm (GET /stop)." >&2; exit 1; }
+  info "Stopped Locust swarm."
 
+  # Download standard Locust CSV exports from master
+  curl -sf "${LOCUST_MASTER_URL}/stats/requests/csv" \
+    -o "${out_csv}_stats.csv" \
+    || { echo "ERROR: Failed to download stats CSV." >&2; exit 1; }
+  curl -sf "${LOCUST_MASTER_URL}/stats/failures/csv" \
+    -o "${out_csv}_failures.csv" \
+    || { echo "ERROR: Failed to download failures CSV." >&2; exit 1; }
+  curl -sf "${LOCUST_MASTER_URL}/exceptions/csv" \
+    -o "${out_csv}_exceptions.csv" \
+    || { echo "ERROR: Failed to download exceptions CSV." >&2; exit 1; }
+  if curl -sf "${LOCUST_MASTER_URL}/stats/requests_full_history/csv" \
+    -o "${out_csv}_stats_history.csv"; then
+    info "Downloaded stats/failures/exceptions/stats_history CSVs to $(dirname "${out_csv}")/"
   else
-    log "Running local Locust: users=${users}, prompt_len=${prompt_len}, label=${label}"
-    VLLM_PROMPT_LEN="${prompt_len}" \
-    CUSTOM_CSV_PREFIX="${out_csv}" \
-    locust \
-      -f "${SCRIPT_DIR}/locustfile.py" \
-      --host "${VLLM_HOST}" \
-      --headless \
-      -u "${users}" \
-      -r "${users}" \
-      --run-time "${LOCUST_RUN_TIME}" \
-      --csv "${out_csv}" \
-      --csv-full-history \
-      --loglevel WARNING 2>&1 | tee -a "${out_csv}_locust.log"
+    info "Downloaded stats/failures/exceptions CSVs to $(dirname "${out_csv}")/"
+    info "stats_history CSV unavailable; continuing without it."
   fi
 }
 
@@ -274,16 +258,41 @@ fi
 NUM_EXPERIMENTS=$(echo "${EXPERIMENTS_JSON}" | jq '. | length')
 log "Total experiments: ${NUM_EXPERIMENTS}"
 
-if [[ "${USE_IN_CLUSTER}" == "true" ]]; then
-  print_grafana_link
+# ---------------------------------------------------------------------------
+# Dry-run: print plan and exit without touching the cluster
+# ---------------------------------------------------------------------------
+if [[ "${DRY_RUN}" == "true" ]]; then
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  log "DRY RUN — no cluster changes will be made"
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
+    exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
+    exp_name=$(echo "${exp}" | jq -r '.name')
+    extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // "(none)"')
+    users_list=$(echo "${exp}" | jq -r '[.concurrency[]] | join(", ")')
+    prompt_categories=$(echo "${exp}" | jq -r '[.prompt_categories[]] | join(", ")')
+    log "[$((i+1))/${NUM_EXPERIMENTS}] ${exp_name}"
+    info "extra_args:        ${extra_args}"
+    info "concurrency:       ${users_list}"
+    info "run_time:          ${LOCUST_RUN_TIME}"
+    info "spawn_rate:        ${SPAWN_RATE:-(= user_count)}"
+    info "cooldown_sec:      ${COOLDOWN_SEC}"
+  done
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  exit 0
 fi
+
+print_grafana_link
+
+# Ensure Locust pods are ready and the port-forward is established once,
+# before any runs begin (avoids repeating this check on every run_locust call).
+ensure_locust_ready
 
 for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
   exp_name=$(echo "${exp}" | jq -r '.name')
   extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""')
   users_list=$(echo "${exp}" | jq -r '.concurrency[]')
-  prompt_categories=$(echo "${exp}" | jq -r '.prompt_categories[]')
 
   log ""
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -303,33 +312,16 @@ for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
     log "No deployment patch. Using current vLLM deployment."
   fi
 
-  # Connect to vLLM — either via external IP or a local port-forward
-  # (--in-cluster mode handles its own port-forward inside run_locust after pod readiness)
-  if [[ "${USE_IN_CLUSTER}" == "true" ]]; then
-    log "In-cluster mode: port-forward will start after pods are ready."
-  elif [[ "${USE_EXTERNAL_IP}" == "true" ]]; then
-    fetch_external_ip
-  else
-    start_port_forward
-  fi
+  for users in ${users_list}; do
+    label="${exp_name}__u${users}"
+    out_csv="${EXP_DIR}/${label}"
 
-  for prompt_cat in ${prompt_categories}; do
-    for users in ${users_list}; do
-      label="${exp_name}__u${users}__${prompt_cat}"
-      out_csv="${EXP_DIR}/${label}"
+    run_locust "${users}" "${label}" "${out_csv}"
+    info "✓ Done: ${label}"
 
-      run_locust "${users}" "${label}" "${out_csv}" "${prompt_cat}"
-      info "✓ Done: ${label}"
-
-      # Brief cooldown between runs
-      sleep 5
-    done
+    # Brief cooldown between runs
+    sleep "${COOLDOWN_SEC}"
   done
-
-  # Stop port-forward before next experiment (skipped when using external IP)
-  if [[ "${USE_EXTERNAL_IP}" != "true" ]]; then
-    stop_port_forward
-  fi
 done
 
 log ""

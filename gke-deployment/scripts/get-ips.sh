@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# get-ips.sh — Fetch external IPs for vLLM and Grafana
+# get-ips.sh — Fetch external IPs for vLLM, Grafana, and Prometheus
 # =============================================================================
 set -euo pipefail
 
@@ -32,11 +32,14 @@ fi
 GRAFANA_IP=$(kubectl get svc "${HELM_RELEASE}-grafana" -n "${MONITORING_NS}" \
     -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 
+# --- Prometheus IP ---
+PROMETHEUS_IP=$(kubectl get svc "${HELM_RELEASE}-kube-prometheus-prometheus" -n "${MONITORING_NS}" \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+
 # --- Print results ---
 echo ""
 echo "  vLLM:"
 if [ -n "${VLLM_IP}" ]; then
-    echo "    IP   : ${VLLM_IP}"
     echo "    URL  : http://${VLLM_IP}:${VLLM_PORT}"
 else
     echo "    ⚠  No external IP assigned. Service may be ClusterIP or still pending."
@@ -46,11 +49,19 @@ fi
 echo ""
 echo "  Grafana:"
 if [ -n "${GRAFANA_IP}" ]; then
-    echo "    IP   : ${GRAFANA_IP}"
     echo "    URL  : http://${GRAFANA_IP}  (admin / admin)"
 else
     echo "    ⚠  No external IP assigned. Grafana may be ClusterIP or still pending."
     echo "    Check: kubectl get svc ${HELM_RELEASE}-grafana -n ${MONITORING_NS}"
+fi
+
+echo ""
+echo "  Prometheus:"
+if [ -n "${PROMETHEUS_IP}" ]; then
+    echo "    URL  : http://${PROMETHEUS_IP}:9090"
+else
+    echo "    ⚠  No external IP assigned. Prometheus may be ClusterIP or still pending."
+    echo "    Check: kubectl get svc ${HELM_RELEASE}-kube-prometheus-prometheus -n ${MONITORING_NS}"
 fi
 
 echo ""

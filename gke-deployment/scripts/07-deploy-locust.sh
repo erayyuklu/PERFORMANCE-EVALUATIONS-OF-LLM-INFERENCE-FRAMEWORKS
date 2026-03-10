@@ -51,7 +51,7 @@ echo "==> Applying Kubernetes manifests..."
 kubectl create namespace locust --dry-run=client -o yaml | kubectl apply -f -
 kubectl create configmap locust-config \
     --namespace=locust \
-    --from-env-file="${SCRIPT_DIR}/../k8s/locust/locust-config.env" \
+    --from-env-file="${SCRIPT_DIR}/../k8s/locust/config.env" \
     --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/service-master.yaml"
 
@@ -63,8 +63,8 @@ sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/../k8s/locust/deployment-worke
 echo "==> Rolling out new image..."
 kubectl rollout restart deployment/locust-master -n locust
 kubectl rollout restart deployment/locust-worker -n locust
-kubectl rollout status deployment/locust-master -n locust --timeout=120s
-kubectl rollout status deployment/locust-worker -n locust --timeout=120s
+kubectl rollout status deployment/locust-master -n locust --timeout=360s
+kubectl rollout status deployment/locust-worker -n locust --timeout=360s
 
 # Monitoring manifests (won't hurt to re-apply if 05-monitoring.sh already did)
 kubectl apply -f "${SCRIPT_DIR}/../k8s/locust/service-monitor.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping service-monitor"
