@@ -65,15 +65,20 @@ echo "Detected model: ${MODEL_NAME}"
 
 # --- Test: Completions ---
 echo ""
-echo "=== POST /v1/completions ==="
-curl -s "${BASE_URL}/v1/completions" \
+echo "=== POST /v1/chat/completions ==="
+curl -s "${BASE_URL}/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{
         \"model\": \"${MODEL_NAME}\",
-        \"prompt\": \"What is 2+2?\",
-        \"max_tokens\": 64,
-        \"temperature\": 0.7
-    }" | head -c 2000
+        \"messages\": [
+            {
+                \"role\": \"user\",
+                \"content\": \"Write the controller layer for a REST API endpoint in Spring Boot. The endpoint should handle GET requests to retrieve a list of users.\"\
+            }
+        ],
+        \"max_tokens\": 2048,
+        \"temperature\": 0
+    }"
 echo ""
 
 echo ""

@@ -28,6 +28,8 @@ spec:
           args:
             - "--model"
             - "$(MODEL)"
+            - "--reasoning-parser"
+            - "$(REASONING_PARSER)"
             - "--max-model-len"
             - "$(MAX_MODEL_LEN)"
             - "--gpu-memory-utilization"
@@ -53,6 +55,11 @@ spec:
                 configMapKeyRef:
                   name: vllm-args-config
                   key: MODEL
+            - name: REASONING_PARSER
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-args-config
+                  key: REASONING_PARSER
             - name: MAX_MODEL_LEN
               valueFrom:
                 configMapKeyRef:

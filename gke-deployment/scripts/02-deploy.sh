@@ -45,12 +45,23 @@ echo "vLLM config ConfigMap created."
 echo "Applying Kubernetes manifests..."
 kubectl apply -n "${K8S_NAMESPACE}" -f "${K8S_DIR}/"
 
+# --- Restart Deployment to pick up ConfigMap changes ---
+DEPLOYMENT_NAME=$(kubectl get deployments -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [ -n "${DEPLOYMENT_NAME}" ]; then
+    echo "Restarting deployment ${DEPLOYMENT_NAME} to pick up potential config changes..."
+    kubectl rollout restart deployment/"${DEPLOYMENT_NAME}" -n "${K8S_NAMESPACE}"
+fi
+
 # --- Wait for rollout ---
-DEPLOYMENT_NAME=$(kubectl get deployments -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+# If this is the first deployment, DEPLOYMENT_NAME might be empty initially until kubectl apply finishes properly, so let's get it again if needed.
+if [ -z "${DEPLOYMENT_NAME}" ]; then
+    DEPLOYMENT_NAME=$(kubectl get deployments -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+fi
+
 echo "Waiting for deployment ${DEPLOYMENT_NAME} rollout (this may take several minutes while the model downloads)..."
 kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
     --namespace="${K8S_NAMESPACE}" \
-    --timeout=60s
+    --timeout=1200s
 
 echo "Deployment complete."
 kubectl get pods -n "${K8S_NAMESPACE}"
