@@ -9,7 +9,7 @@ source "${SCRIPT_DIR}/../vllm/infra_config.env"
 source "${SCRIPT_DIR}/config.env"
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
-FUNCTION_SOURCE="${SCRIPT_DIR}/../function"
+FUNCTION_SOURCE="${SCRIPT_DIR}/function"
 
 # Uses REGION from config.env instead of FUNCTION_REGION
 FUNCTION_REGION="${REGION}"
