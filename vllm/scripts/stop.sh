@@ -55,7 +55,7 @@ pause_cluster() {
     echo "  Pausing: scaling system (default-pool) and GPU node pools to 0"
     echo "  Cluster  : ${CLUSTER_NAME}"
     echo "  System   : default-pool"
-    echo "  GPU pool : ${NODE_POOL_NAME}"
+    echo "  GPU pool : ${GPU_NODE_POOL_NAME}"
     echo "  Zone     : ${ZONE}"
     echo "============================================================"
 
@@ -71,11 +71,11 @@ pause_cluster() {
         --quiet
 
     # Scale down the GPU node pool — VMs are deleted, GPUs freed, disks kept
-    echo "Scaling down GPU node pool (${NODE_POOL_NAME}) to 0..."
+    echo "Scaling down GPU node pool (${GPU_NODE_POOL_NAME}) to 0..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
-        --node-pool="${NODE_POOL_NAME}" \
+        --node-pool="${GPU_NODE_POOL_NAME}" \
         --num-nodes=0 \
         --quiet
 
@@ -92,7 +92,7 @@ resume_cluster() {
     echo "  Resuming: scaling system (default-pool) and GPU node pools"
     echo "  Cluster  : ${CLUSTER_NAME}"
     echo "  System   : default-pool -> 1 node"
-    echo "  GPU pool : ${NODE_POOL_NAME} -> ${NUM_GPU_NODES} node(s)"
+    echo "  GPU pool : ${GPU_NODE_POOL_NAME} -> ${NUM_GPU_NODES} node(s)"
     echo "  Zone     : ${ZONE}"
     echo "============================================================"
 
@@ -107,11 +107,11 @@ resume_cluster() {
         --num-nodes=1 \
         --quiet
 
-    echo "Scaling up GPU node pool (${NODE_POOL_NAME}) to ${NUM_GPU_NODES}..."
+    echo "Scaling up GPU node pool (${GPU_NODE_POOL_NAME}) to ${NUM_GPU_NODES}..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
-        --node-pool="${NODE_POOL_NAME}" \
+        --node-pool="${GPU_NODE_POOL_NAME}" \
         --num-nodes="${NUM_GPU_NODES}" \
         --quiet
 
