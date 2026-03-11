@@ -27,7 +27,7 @@ source "${SCRIPT_DIR}/config.env"
 # ---------------------------------------------------------------------------
 EXPERIMENT_FILE="${EXPERIMENT_FILE:-${SCRIPT_DIR}/experiments/experiments.json}"
 EXPERIMENT_NAME=""                              # if set, run only this experiment
-RESULTS_BASE="${SCRIPT_DIR}/../results"
+RESULTS_BASE="${SCRIPT_DIR}/results"
 NAMESPACE="${K8S_NAMESPACE:-vllm}"
 DEPLOYMENT_NAME="vllm-server"
 PORT_FORWARD_PID=""

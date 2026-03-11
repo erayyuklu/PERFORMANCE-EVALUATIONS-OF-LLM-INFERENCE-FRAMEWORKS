@@ -1,0 +1,4 @@
+locust>=2.29.0
+requests>=2.31.0
+sseclient-py>=1.8.0
+prometheus_client>=0.20.0
