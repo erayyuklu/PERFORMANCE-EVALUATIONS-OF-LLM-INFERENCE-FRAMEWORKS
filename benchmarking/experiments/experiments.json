@@ -2,15 +2,81 @@
   {
     "name": "baseline",
     "description": "Bare vLLM: chunked prefill OFF, prefix caching OFF. Pure performance baseline with no optimizations.",
-    "vllm_extra_args": "",
-    "concurrency": [4, 8],
+    "vllm_extra_args": "--no-enable-chunked-prefill --no-enable-prefix-caching",
+    "concurrency": [1, 4, 8],
     "prompt_categories": ["all"]
   },
   {
     "name": "max_seqs_8",
     "description": "Reduce max-num-seqs to 8 (default=128). Limits batch size to reduce per-request latency under load.",
-    "vllm_extra_args": "--max-num-seqs 8",
-    "concurrency": [4, 8],
+    "vllm_extra_args": "--max-num-seqs 8 --no-enable-chunked-prefill --no-enable-prefix-caching",
+    "concurrency": [1, 4, 8],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "max_seqs_32",
+    "description": "Set max-num-seqs to 32 (default=128). Moderate batching for balanced throughput/latency.",
+    "vllm_extra_args": "--max-num-seqs 32 --no-enable-chunked-prefill --no-enable-prefix-caching",
+    "concurrency": [1, 8, 32],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "gpu_mem_80",
+    "description": "Lower gpu-memory-utilization to 0.80 (default=0.90). Fewer KV cache blocks, more headroom.",
+    "vllm_extra_args": "--gpu-memory-utilization 0.80 --no-enable-chunked-prefill --no-enable-prefix-caching",
+    "concurrency": [1, 4, 8],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "gpu_mem_95",
+    "description": "Push gpu-memory-utilization to 0.95. Maximizes KV cache blocks at the risk of OOM under pressure.",
+    "vllm_extra_args": "--gpu-memory-utilization 0.95 --no-enable-chunked-prefill --no-enable-prefix-caching",
+    "concurrency": [1, 4, 8, 16],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "chunked_prefill",
+    "description": "Enable chunked prefill only. Interleaves prefill chunks with decode steps to reduce TTFT jitter under concurrency.",
+    "vllm_extra_args": "--enable-chunked-prefill --no-enable-prefix-caching",
+    "concurrency": [1, 4, 8],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "prefix_caching",
+    "description": "Enable automatic prefix caching only. Reuses KV cache blocks across requests sharing common prefixes.",
+    "vllm_extra_args": "--no-enable-chunked-prefill --enable-prefix-caching",
+    "concurrency": [1, 4, 8],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "chunked_prefill_plus_prefix_cache",
+    "description": "Both chunked prefill + prefix caching ON (vLLM v0.16 default config). Expected best overall configuration.",
+    "vllm_extra_args": "--enable-chunked-prefill --enable-prefix-caching",
+    "concurrency": [1, 4, 8, 16],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "prefix_baseline",
+    "description": "Shared-prefix dataset, prefix caching OFF. Control group for measuring prefix caching benefit.",
+    "vllm_extra_args": "--no-enable-chunked-prefill --no-enable-prefix-caching",
+    "dataset": "prompts/prefix_dataset.json",
+    "concurrency": [1, 4, 8],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "prefix_caching_on",
+    "description": "Shared-prefix dataset, prefix caching ON. Shows KV block reuse across requests with common system prompts.",
+    "vllm_extra_args": "--no-enable-chunked-prefill --enable-prefix-caching",
+    "dataset": "prompts/prefix_dataset.json",
+    "concurrency": [1, 4, 8],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "prefix_chunked_plus_cache",
+    "description": "Shared-prefix dataset, both chunked prefill + prefix caching ON. Full optimization with prefix reuse.",
+    "vllm_extra_args": "--enable-chunked-prefill --enable-prefix-caching",
+    "dataset": "prompts/prefix_dataset.json",
+    "concurrency": [1, 4, 8, 16],
     "prompt_categories": ["all"]
   }
 ]

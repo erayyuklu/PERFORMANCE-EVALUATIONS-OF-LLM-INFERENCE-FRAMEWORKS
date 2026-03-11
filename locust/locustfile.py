@@ -43,6 +43,16 @@ from pathlib import Path
 import sseclient
 from locust import HttpUser, constant, events, task
 from locust.runners import MasterRunner, WorkerRunner
+import logging
+import sys
+
+# Configure logging to stdout so container/pod logs capture messages.
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # prometheus_client for built-in metrics export
 try:
@@ -127,7 +137,7 @@ def _on_locust_init(environment, **kwargs):
         return
 
     if not _HAS_PROM_CLIENT:
-        print(
+        logger.warning(
             "[benchmarking] WARNING: prometheus_client not installed. "
             "Prometheus /metrics endpoint will NOT be available. "
             "Install with: pip install prometheus_client"
@@ -135,7 +145,7 @@ def _on_locust_init(environment, **kwargs):
         return
 
     _prom_start_http_server(PROMETHEUS_PORT, registry=_prom_registry)
-    print(f"[benchmarking] Prometheus /metrics listening on :{PROMETHEUS_PORT}")
+    logger.info(f"[benchmarking] Prometheus /metrics listening on :{PROMETHEUS_PORT}")
 
     import gevent
 
@@ -170,9 +180,9 @@ def _on_request(request_type, name, response_time, response_length, exception, *
 def _download_sharegpt() -> None:
     """Download the ShareGPT JSON file if it's not already present."""
     SHAREGPT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    print(f"[benchmarking] Downloading ShareGPT dataset from {SHAREGPT_URL} ...")
+    logger.info(f"[benchmarking] Downloading ShareGPT dataset from {SHAREGPT_URL} ...")
     urllib.request.urlretrieve(SHAREGPT_URL, SHAREGPT_PATH)
-    print(f"[benchmarking] ShareGPT dataset saved to {SHAREGPT_PATH}")
+    logger.info(f"[benchmarking] ShareGPT dataset saved to {SHAREGPT_PATH}")
 
 
 def _categorise(first_human_text: str) -> str:
@@ -244,8 +254,10 @@ def _load_sharegpt() -> list[dict]:
             f"VLLM_PROMPT_LEN={PROMPT_LEN!r}, SHAREGPT_MIN_TURNS={SHAREGPT_MIN_TURNS}"
         )
 
-    print(f"[benchmarking] Loaded {len(prompts)} ShareGPT conversations "
-          f"(filter: {PROMPT_LEN}, min_turns: {SHAREGPT_MIN_TURNS})")
+    logger.info(
+        f"[benchmarking] Loaded {len(prompts)} ShareGPT conversations "
+        f"(filter: {PROMPT_LEN}, min_turns: {SHAREGPT_MIN_TURNS})"
+    )
     return prompts
 
 
@@ -288,8 +300,10 @@ def _load_custom() -> list[dict]:
             "approx_chars": len(prompt_text),
         })
 
-    print(f"[benchmarking] Loaded {len(prompts)} custom prompts "
-          f"(filter: {PROMPT_LEN}) from {CUSTOM_DATASET_PATH}")
+    logger.info(
+        f"[benchmarking] Loaded {len(prompts)} custom prompts "
+        f"(filter: {PROMPT_LEN}) from {CUSTOM_DATASET_PATH}"
+    )
     return prompts
 
 
@@ -427,9 +441,8 @@ class VllmUser(HttpUser):
             "",
         )
 
-        reasoning_text, response_text = "", ""
-        if full_response.includes("</think>"):
-            reasoning_text, response_text = full_response.split("</think>")
+        if "</think>" in full_response:
+            reasoning_text, response_text = full_response.split("</think>", 1)
         else:
             reasoning_text = ""
             response_text = full_response
@@ -498,15 +511,17 @@ def _write_responses(environment):
         return
 
     if not _response_rows:
-        print("[benchmarking] No prompt/response data to write.")
+        logger.info("[benchmarking] No prompt/response data to write.")
         return
 
     with open(_RESPONSES_POD_PATH, "w", encoding="utf-8") as f:
         for row in _response_rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    print(f"[benchmarking] Prompt/response log written to: {_RESPONSES_POD_PATH} "
-          f"({len(_response_rows)} entries)")
+    logger.info(
+        f"[benchmarking] Prompt/response log written to: {_RESPONSES_POD_PATH} "
+        f"({len(_response_rows)} entries)"
+    )
 
 
 def _write_custom_metrics(environment):
@@ -528,8 +543,10 @@ def _write_custom_metrics(environment):
         writer.writeheader()
         writer.writerows(_custom_rows)
 
-    print(f"\n[benchmarking] Custom metrics written to: {_CUSTOM_METRICS_POD_PATH} "
-          f"({len(_custom_rows)} rows)")
+    logger.info(
+        f"\n[benchmarking] Custom metrics written to: {_CUSTOM_METRICS_POD_PATH} "
+        f"({len(_custom_rows)} rows)"
+    )
     _print_summary(_custom_rows)
 
 
@@ -555,13 +572,13 @@ def _print_summary(rows: list[dict]):
             f"min={s[0]:.1f}  max={s[-1]:.1f}"
         )
 
-    print("\n" + "=" * 70)
-    print("  BENCHMARK SUMMARY")
-    print("=" * 70)
-    print(f"  Total requests : {n}")
-    print(f"  Successful     : {len(successful)}  ({100*len(successful)/n:.1f}%)")
-    print(f"  Failed         : {len(failed)}")
-    print(f"  TTFT (ms)      : {_stats(ttfts)}")
-    print(f"  TPOT (ms/tok)  : {_stats(tpots)}")
-    print(f"  E2E  (ms)      : {_stats(e2es)}")
-    print("=" * 70 + "\n")
+    logger.info("\n" + "=" * 70)
+    logger.info("  BENCHMARK SUMMARY")
+    logger.info("=" * 70)
+    logger.info(f"  Total requests : {n}")
+    logger.info(f"  Successful     : {len(successful)}  ({100*len(successful)/n:.1f}%)")
+    logger.info(f"  Failed         : {len(failed)}")
+    logger.info(f"  TTFT (ms)      : {_stats(ttfts)}")
+    logger.info(f"  TPOT (ms/tok)  : {_stats(tpots)}")
+    logger.info(f"  E2E  (ms)      : {_stats(e2es)}")
+    logger.info("=" * 70 + "\n")

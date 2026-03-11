@@ -284,7 +284,7 @@ run_locust() {
   # Copy and merge per-request files from all worker pods.
   # Workers write their own shard on test_stop; we concatenate them locally.
   log "Copying per-request files from Locust worker pods..."
-  sleep 3  # allow test_stop handlers on workers to finish writing
+  sleep 10  # allow test_stop handlers on workers to finish writing
 
   local worker_pods
   worker_pods=$(kubectl get pod -n "${LOCUST_NAMESPACE}" \
