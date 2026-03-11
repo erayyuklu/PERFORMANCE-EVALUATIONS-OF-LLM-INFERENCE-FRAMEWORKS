@@ -1,0 +1,14 @@
+{
+  "name": "baseline",
+  "description": "Baseline experiment with default settings.",
+  "vllm_extra_args": "",
+  "concurrency": [
+    4,
+    8,
+    16,
+    32
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

@@ -1,0 +1,4 @@
+Method,Name,Error,Occurrences
+POST,chat/medium,CatchResponseError('HTTP 400'),5
+POST,chat/short,CatchResponseError('HTTP 400'),8
+POST,chat/long,CatchResponseError('HTTP 400'),7
