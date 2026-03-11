@@ -3,8 +3,9 @@
 # stop.sh — Pause the cluster to stop GPU charges without losing resources
 #
 # What this does:
-#   --pause   Scale GPU node pool to 0 (stops VM charges, keeps disk & pool config)
-#   --resume  Scale GPU node pool back to its original node count
+#   --pause   Scale both the system (default-pool) and GPU node pools to 0
+#             (stops VM/GPU charges, keeps disks & pool config)
+#   --resume  Scale both pools back (system -> 1 node; GPU -> original node count)
 #
 # What is preserved:
 #   ✓ Cluster and node pool definitions (no reconfig needed on resume)
@@ -13,6 +14,7 @@
 #
 # What stops charging:
 #   ✓ GPU VM instances (biggest cost driver)
+#   ✓ System VM instances (default-pool)
 #   ✓ Nvidia L4 GPU reservation
 #
 # Note: The GKE control plane (e2-medium system pool) continues to run at
@@ -29,8 +31,8 @@ PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 usage() {
     echo "Usage: $0 [--pause | --resume]"
     echo ""
-    echo "  --pause   Scale GPU node pool to 0  (stop GPU charges)"
-    echo "  --resume  Scale GPU node pool back to ${NUM_GPU_NODES} node(s)"
+    echo "  --pause   Scale system (default-pool) and GPU node pools to 0 (stop VM/GPU charges)"
+    echo "  --resume  Scale system pool to 1 and GPU node pool back to ${NUM_GPU_NODES} node(s)"
     exit 1
 }
 
@@ -50,16 +52,17 @@ check_cluster() {
 
 pause_cluster() {
     echo "============================================================"
-    echo "  Pausing: scaling GPU node pool to 0"
+    echo "  Pausing: scaling system (default-pool) and GPU node pools to 0"
     echo "  Cluster  : ${CLUSTER_NAME}"
-    echo "  Node pool: ${NODE_POOL_NAME}"
+    echo "  System   : default-pool"
+    echo "  GPU pool : ${NODE_POOL_NAME}"
     echo "  Zone     : ${ZONE}"
     echo "============================================================"
 
     check_cluster
 
     # Scale down system pool first (e2-medium VMs)
-    echo "Scaling down system node pool (default-pool)..."
+    echo "Scaling down system node pool (default-pool) to 0..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
@@ -68,7 +71,7 @@ pause_cluster() {
         --quiet
 
     # Scale down the GPU node pool — VMs are deleted, GPUs freed, disks kept
-    echo "Scaling down GPU node pool (${NODE_POOL_NAME})..."
+    echo "Scaling down GPU node pool (${NODE_POOL_NAME}) to 0..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
@@ -77,7 +80,7 @@ pause_cluster() {
         --quiet
 
     echo ""
-    echo "✓ Both node pools scaled to 0. GPU/VM charges have stopped."
+    echo "✓ Both node pools scaled to 0. VM and GPU charges have stopped."
     echo "  Persistent disks and cluster configuration are intact."
     echo ""
     echo "  To resume:  bash $(basename "$0") --resume"
@@ -86,16 +89,17 @@ pause_cluster() {
 
 resume_cluster() {
     echo "============================================================"
-    echo "  Resuming: scaling GPU node pool to ${NUM_GPU_NODES} node(s)"
+    echo "  Resuming: scaling system (default-pool) and GPU node pools"
     echo "  Cluster  : ${CLUSTER_NAME}"
-    echo "  Node pool: ${NODE_POOL_NAME}"
+    echo "  System   : default-pool -> 1 node"
+    echo "  GPU pool : ${NODE_POOL_NAME} -> ${NUM_GPU_NODES} node(s)"
     echo "  Zone     : ${ZONE}"
     echo "============================================================"
 
     check_cluster
 
     # Bring system pool up first so the cluster is schedulable
-    echo "Scaling up system node pool (default-pool)..."
+    echo "Scaling up system node pool (default-pool) to 1..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
@@ -103,7 +107,7 @@ resume_cluster() {
         --num-nodes=1 \
         --quiet
 
-    echo "Scaling up GPU node pool (${NODE_POOL_NAME})..."
+    echo "Scaling up GPU node pool (${NODE_POOL_NAME}) to ${NUM_GPU_NODES}..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
@@ -119,7 +123,7 @@ resume_cluster() {
         --quiet
 
     echo ""
-    echo "✓ GPU node pool scaled back to ${NUM_GPU_NODES} node(s)."
+    echo "✓ System and GPU node pools scaled back (system=1, gpu=${NUM_GPU_NODES})."
     echo ""
     kubectl get nodes
     echo ""

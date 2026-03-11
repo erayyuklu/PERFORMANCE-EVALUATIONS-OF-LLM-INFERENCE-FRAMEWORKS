@@ -25,7 +25,7 @@ else
         --zone="${ZONE}" \
         --cluster-version="${CLUSTER_VERSION}" \
         --num-nodes=1 \
-        --machine-type="e2-standard-4" \
+        --machine-type="${DEFAULT_MACHINE_TYPE}" \
         --disk-size="${DISK_SIZE_GB}" \
         --quiet
     echo "Cluster created."
@@ -36,18 +36,18 @@ EXISTING_POOL=$(gcloud container node-pools list \
     --cluster="${CLUSTER_NAME}" \
     --project="${PROJECT_ID}" \
     --zone="${ZONE}" \
-    --filter="name=${NODE_POOL_NAME}" \
+    --filter="name=${GPU_NODE_POOL_NAME}" \
     --format="value(name)" 2>/dev/null)
 
 if [ -n "${EXISTING_POOL}" ]; then
-    echo "Node pool ${NODE_POOL_NAME} already exists, skipping creation."
+    echo "Node pool ${GPU_NODE_POOL_NAME} already exists, skipping creation."
 else
-    echo "Creating GPU node pool ${NODE_POOL_NAME}..."
-    gcloud container node-pools create "${NODE_POOL_NAME}" \
+    echo "Creating GPU node pool ${GPU_NODE_POOL_NAME}..."
+    gcloud container node-pools create "${GPU_NODE_POOL_NAME}" \
         --cluster="${CLUSTER_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
-        --machine-type="${MACHINE_TYPE}" \
+        --machine-type="${GPU_MACHINE_TYPE}" \
         --accelerator="type=${GPU_TYPE},count=${GPU_COUNT}" \
         --num-nodes="${NUM_GPU_NODES}" \
         --disk-size="${DISK_SIZE_GB}" \
