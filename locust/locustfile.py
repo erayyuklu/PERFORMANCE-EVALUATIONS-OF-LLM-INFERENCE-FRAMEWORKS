@@ -19,7 +19,7 @@ Environment variables:
     VLLM_MODEL_NAME        — model identifier sent in the request body (default: see below)
     VLLM_MAX_TOKENS        — max tokens to generate per request (default: 256)
     VLLM_TEMPERATURE       — sampling temperature (default: 0.0 for deterministic outputs)
-    VLLM_REQUEST_TIMEOUT   — per-request timeout in seconds (default: 120)
+    VLLM_REQUEST_TIMEOUT   — per-request timeout in seconds (default: 180)
     DATASET_TYPE           — which dataset to use: sharegpt | custom  (default: sharegpt)
     SHAREGPT_PATH          — path to the ShareGPT JSON file (default: prompts/sharegpt.json)
     SHAREGPT_URL           — URL to download ShareGPT from if the file is missing
@@ -60,7 +60,7 @@ except ImportError:
 MODEL_NAME      = os.getenv("VLLM_MODEL_NAME",   "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
 MAX_TOKENS      = int(os.getenv("VLLM_MAX_TOKENS",    "256"))
 TEMPERATURE     = float(os.getenv("VLLM_TEMPERATURE",  "0.0"))
-REQUEST_TIMEOUT = float(os.getenv("VLLM_REQUEST_TIMEOUT", "120"))
+REQUEST_TIMEOUT = float(os.getenv("VLLM_REQUEST_TIMEOUT", "180"))
 
 DATASET_TYPE    = os.getenv("DATASET_TYPE", "sharegpt").lower()  # sharegpt | custom
 
@@ -82,10 +82,10 @@ PROMETHEUS_PORT = int(os.getenv("LOCUST_PROMETHEUS_PORT", "9646"))
 # Character thresholds for PROMPT_LEN categorisation (first human turn length)
 _LEN_THRESHOLDS = {"short": 200, "medium": 1000}  # < short → short, < medium → medium, else long
 
-# Aggregated custom metrics — written to CSV at end of test
+# Aggregated custom metrics — populated on workers, written to file on test_stop
 _custom_rows: list[dict] = []
 
-# Prompt/response pairs — written to JSONL at end of test
+# Prompt/response pairs — populated on workers, written to file on test_stop
 _response_rows: list[dict] = []
 
 
@@ -427,6 +427,13 @@ class VllmUser(HttpUser):
             "",
         )
 
+        reasoning_text, response_text = "", ""
+        if full_response.includes("</think>"):
+            reasoning_text, response_text = full_response.split("</think>")
+        else:
+            reasoning_text = ""
+            response_text = full_response
+
         _custom_rows.append({
             "timestamp":     t_request_sent,
             "category":      category,
@@ -446,7 +453,8 @@ class VllmUser(HttpUser):
             "timestamp":     t_request_sent,
             "category":      category,
             "prompt":        prompt_text,
-            "response":      full_response,
+            "reasoning":     reasoning_text,
+            "response":      response_text,
             "output_tokens": output_tokens,
             "finish_reason": finish_reason,
             "success":       success,
@@ -480,11 +488,17 @@ _CUSTOM_METRICS_POD_PATH = Path("/tmp/locust_custom_metrics.csv")
 
 
 def _write_responses(environment):
-    """Write prompt/response pairs to a JSONL file on the master pod."""
-    if isinstance(environment.runner, WorkerRunner):
+    """Write prompt/response pairs to a JSONL file.
+
+    In distributed mode each worker writes its own shard to the pod's /tmp.
+    run_experiment.sh then kubectl-cp from every worker pod and concatenates.
+    The master process skips writing in distributed mode.
+    """
+    if isinstance(environment.runner, MasterRunner):
         return
 
     if not _response_rows:
+        print("[benchmarking] No prompt/response data to write.")
         return
 
     with open(_RESPONSES_POD_PATH, "w", encoding="utf-8") as f:
@@ -496,8 +510,13 @@ def _write_responses(environment):
 
 
 def _write_custom_metrics(environment):
-    """Write custom per-request metrics to a CSV file on the master pod."""
-    if isinstance(environment.runner, WorkerRunner):
+    """Write custom per-request metrics to a CSV file.
+
+    In distributed mode each worker writes its own shard to the pod's /tmp.
+    run_experiment.sh then kubectl-cp from every worker pod and merges.
+    The master process skips writing in distributed mode.
+    """
+    if isinstance(environment.runner, MasterRunner):
         return
 
     if not _custom_rows:

@@ -80,7 +80,7 @@ patch_vllm_args() {
   log "Patching vLLM deployment with args: ${extra_args}"
 
   # Base args mirroring deployment.yaml (each flag and value as separate elements)
-  local base_args='["--model","$(MODEL)","--max-model-len","$(MAX_MODEL_LEN)","--gpu-memory-utilization","$(GPU_MEMORY_UTILIZATION)","--dtype","$(DTYPE)","--tensor-parallel-size","$(TENSOR_PARALLEL_SIZE)","--port","$(PORT)"]'
+  local base_args='["--model","$(MODEL)","--reasoning-parser","$(REASONING_PARSER)","--max-model-len","$(MAX_MODEL_LEN)","--gpu-memory-utilization","$(GPU_MEMORY_UTILIZATION)","--dtype","$(DTYPE)","--tensor-parallel-size","$(TENSOR_PARALLEL_SIZE)","--port","$(PORT)"]'
 
   # Split extra_args into individual tokens and build a JSON array
   local extra_json="[]"
@@ -162,10 +162,6 @@ ensure_locust_ready() {
   kubectl wait --for=condition=Ready pod -l app=locust \
     -n "${LOCUST_NAMESPACE}" --timeout=300s
   info "All Locust pods are Ready."
-
-  # Give workers time to register with master (they connect via ZMQ after pod Ready)
-  info "Waiting 15s for workers to register with master..."
-  sleep 15
 
   log "Starting port-forward to Locust master (locust-master:8089)..."
   kubectl port-forward svc/locust-master 8089:8089 -n "${LOCUST_NAMESPACE}" &>/dev/null &
@@ -285,26 +281,51 @@ run_locust() {
     --prometheus-url "${PROMETHEUS_URL}" \
     || log "WARNING: Prometheus metrics fetch failed for ${label}; continuing."
 
-  # Copy prompt/response log from the master pod to local results directory
-  log "Copying prompt/response log from Locust master pod..."
-  sleep 2  # allow test_stop handlers to finish writing
-  local master_pod
-  master_pod=$(kubectl get pod -n "${LOCUST_NAMESPACE}" \
-    -l app=locust,role=master \
-    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-  if [[ -n "${master_pod}" ]]; then
-    kubectl cp \
-      "${LOCUST_NAMESPACE}/${master_pod}:/tmp/locust_custom_metrics.csv" \
-      "${out_csv}_custom_metrics.csv" 2>/dev/null \
-      && info "Custom metrics saved to ${out_csv}_custom_metrics.csv" \
-      || info "WARNING: Could not fetch custom metrics from pod."
-    kubectl cp \
-      "${LOCUST_NAMESPACE}/${master_pod}:/tmp/locust_responses.jsonl" \
-      "${out_csv}_prompt_responses.jsonl" 2>/dev/null \
-      && info "Prompt/response log saved to ${out_csv}_prompt_responses.jsonl" \
-      || info "WARNING: Could not fetch prompt/response log from pod (file may be absent if all requests failed)."
+  # Copy and merge per-request files from all worker pods.
+  # Workers write their own shard on test_stop; we concatenate them locally.
+  log "Copying per-request files from Locust worker pods..."
+  sleep 3  # allow test_stop handlers on workers to finish writing
+
+  local worker_pods
+  worker_pods=$(kubectl get pod -n "${LOCUST_NAMESPACE}" \
+    -l app=locust,role=worker \
+    -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
+
+  if [[ -z "${worker_pods}" ]]; then
+    info "WARNING: No worker pods found — skipping per-request file copy."
   else
-    info "WARNING: Could not find locust-master pod — skipping prompt/response copy."
+    local first_worker=true
+    local tmp_csv tmp_jsonl
+    for pod in ${worker_pods}; do
+      tmp_csv="${pod}_custom.csv"
+      tmp_jsonl="${pod}_responses.jsonl"
+
+      # Custom metrics CSV — first worker becomes the file, rest are appended (no header)
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:/tmp/locust_custom_metrics.csv" "${tmp_csv}"; then
+        if [[ "${first_worker}" == "true" ]]; then
+          mv "${tmp_csv}" "${out_csv}_custom_metrics.csv"
+          first_worker=false
+        else
+          tail -n +2 "${tmp_csv}" >> "${out_csv}_custom_metrics.csv"
+          rm -f "${tmp_csv}"
+        fi
+        info "Custom metrics copied from ${pod}."
+      else
+        info "WARNING: Could not fetch custom metrics from ${pod}."
+      fi
+
+      # Prompt/response JSONL — simply concatenate
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:/tmp/locust_responses.jsonl" "${tmp_jsonl}"; then
+        cat "${tmp_jsonl}" >> "${out_csv}_prompt_responses.jsonl"
+        rm -f "${tmp_jsonl}"
+        info "Prompt/response log copied from ${pod}."
+      else
+        info "WARNING: Could not fetch prompt/response log from ${pod}."
+      fi
+    done
+    [[ "${first_worker}" == "false" ]] \
+      && info "Per-request files saved to $(dirname "${out_csv}")/" \
+      || info "WARNING: No per-request data was collected from any worker."
   fi
 }
 
