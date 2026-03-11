@@ -33,6 +33,8 @@ DEPLOYMENT_NAME="vllm-server"
 PORT_FORWARD_PID=""
 PROM_PORT_FORWARD_PID=""
 DRY_RUN=false
+# Estimated time for a vLLM deployment rollout (seconds). Default: 15 minutes
+ROLLOUT_SEC="${ROLLOUT_SEC:-900}"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -105,18 +107,23 @@ patch_vllm_args() {
 print_grafana_link() {
   local duration_sec="${LOCUST_RUN_TIME%s}"
 
-  # Count total individual locust runs across all experiments
+  # Count total individual locust runs across all experiments and rollouts
   local total_runs=0
+  local rollout_count=0
   for idx in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
-    local e n_users n_cats
+    local e n_users n_cats extra_args
     e=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}]")
     n_users=$(echo "${e}" | jq '.concurrency | length')
     n_cats=$(echo "${e}" | jq '.prompt_categories | length')
+    extra_args=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}].vllm_extra_args // \"\"")
+    if [[ -n "${extra_args}" ]]; then
+      rollout_count=$(( rollout_count + 1 ))
+    fi
     total_runs=$(( total_runs + n_users * n_cats ))
   done
 
-  # Expected window: runs × (duration + cooldown) + 2 min overhead buffer
-  local total_sec=$(( total_runs * (duration_sec + COOLDOWN_SEC) + 120 ))
+  # Expected window: runs × (duration + cooldown) + rollouts + 2 min overhead buffer
+  local total_sec=$(( total_runs * (duration_sec + COOLDOWN_SEC) + rollout_count * ROLLOUT_SEC + 120 ))
 
   local from_ms to_ms
   from_ms=$(date +%s%3N)                              # epoch milliseconds (GNU date / Linux)
@@ -141,6 +148,12 @@ print_grafana_link() {
   log "  Covers ${total_runs} run(s) × ${duration_sec}s + overhead"
   log "  ${url}"
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # Save Grafana link to results directory for later reference
+  if [[ -n "${RUN_DIR:-}" ]]; then
+    echo "${url}" > "${RUN_DIR}/grafana_link.txt" || true
+    log "Saved Grafana link to ${RUN_DIR}/grafana_link.txt"
+  fi
 }
 
 # Called ONCE before the main loop to avoid repeating readiness checks per run.
@@ -175,8 +188,8 @@ ensure_locust_ready() {
   fi
 
   # Start port-forward to Prometheus for metrics fetching
-  log "Starting port-forward to Prometheus (prometheus-server:9090)..."
-  kubectl port-forward svc/prometheus-server 9090:80 -n monitoring &>/dev/null &
+  log "Starting port-forward to Prometheus (monitoring-kube-prometheus-prometheus:9090)..."
+  kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring &>/dev/null &
   PROM_PORT_FORWARD_PID=$!
   info "Prometheus Port-forward PID: ${PROM_PORT_FORWARD_PID}"
 
@@ -271,6 +284,28 @@ run_locust() {
     --output "${out_csv}_prometheus_metrics.csv" \
     --prometheus-url "${PROMETHEUS_URL}" \
     || log "WARNING: Prometheus metrics fetch failed for ${label}; continuing."
+
+  # Copy prompt/response log from the master pod to local results directory
+  log "Copying prompt/response log from Locust master pod..."
+  sleep 2  # allow test_stop handlers to finish writing
+  local master_pod
+  master_pod=$(kubectl get pod -n "${LOCUST_NAMESPACE}" \
+    -l app=locust,role=master \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "${master_pod}" ]]; then
+    kubectl cp \
+      "${LOCUST_NAMESPACE}/${master_pod}:/tmp/locust_custom_metrics.csv" \
+      "${out_csv}_custom_metrics.csv" 2>/dev/null \
+      && info "Custom metrics saved to ${out_csv}_custom_metrics.csv" \
+      || info "WARNING: Could not fetch custom metrics from pod."
+    kubectl cp \
+      "${LOCUST_NAMESPACE}/${master_pod}:/tmp/locust_responses.jsonl" \
+      "${out_csv}_prompt_responses.jsonl" 2>/dev/null \
+      && info "Prompt/response log saved to ${out_csv}_prompt_responses.jsonl" \
+      || info "WARNING: Could not fetch prompt/response log from pod (file may be absent if all requests failed)."
+  else
+    info "WARNING: Could not find locust-master pod — skipping prompt/response copy."
+  fi
 }
 
 # ---------------------------------------------------------------------------

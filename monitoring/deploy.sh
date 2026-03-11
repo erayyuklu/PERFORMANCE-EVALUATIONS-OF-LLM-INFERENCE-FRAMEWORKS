@@ -48,6 +48,8 @@ helm upgrade --install "${HELM_RELEASE}" prometheus-community/kube-prometheus-st
     --set prometheus.service.type="LoadBalancer" \
     --set grafana.imageRenderer.enabled=true \
     --set grafana.imageRenderer.replicas=1 \
+    --set grafana."grafana\.ini"."auth.anonymous".enabled=true \
+    --set grafana."grafana\.ini"."auth.anonymous".org_role=Viewer \
     --set grafana."grafana\.ini".rendering.server_url=http://${HELM_RELEASE}-grafana-image-renderer.${MONITORING_NS}:8081/render \
     --set grafana."grafana\.ini".rendering.callback_url=http://${HELM_RELEASE}-grafana.${MONITORING_NS}:80/ \
     --wait \

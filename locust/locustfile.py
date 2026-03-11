@@ -77,7 +77,6 @@ _DEFAULT_CUSTOM = Path(__file__).parent / "prompts" / "dataset.json"
 CUSTOM_DATASET_PATH = Path(os.getenv("CUSTOM_DATASET_PATH", _DEFAULT_CUSTOM))
 
 PROMPT_LEN      = os.getenv("VLLM_PROMPT_LEN", "all")  # short | medium | long | all
-CSV_PREFIX      = os.getenv("CUSTOM_CSV_PREFIX", "")    # set by run_experiment.sh
 PROMETHEUS_PORT = int(os.getenv("LOCUST_PROMETHEUS_PORT", "9646"))
 
 # Character thresholds for PROMPT_LEN categorisation (first human turn length)
@@ -85,6 +84,9 @@ _LEN_THRESHOLDS = {"short": 200, "medium": 1000}  # < short → short, < medium 
 
 # Aggregated custom metrics — written to CSV at end of test
 _custom_rows: list[dict] = []
+
+# Prompt/response pairs — written to JSONL at end of test
+_response_rows: list[dict] = []
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +108,13 @@ if _HAS_PROM_CLIENT:
         labelnames=["result"],
         registry=_prom_registry,
     )
+
+
+@events.test_start.add_listener
+def _on_test_start(environment, **kwargs):
+    """Clear per-run buffers so each swarm run produces its own output files."""
+    _custom_rows.clear()
+    _response_rows.clear()
 
 
 @events.init.add_listener
@@ -369,6 +378,7 @@ class VllmUser(HttpUser):
                     return
 
                 t_prev = None
+                full_response_parts: list[str] = []
                 for token_text, finish in _stream_tokens(response):
                     t_now = time.perf_counter()
 
@@ -379,6 +389,7 @@ class VllmUser(HttpUser):
                         inter_token_times.append((t_now - t_prev) * 1000)  # ms
 
                     if token_text:
+                        full_response_parts.append(token_text)
                         output_tokens += 1
                         t_prev = t_now
 
@@ -386,10 +397,12 @@ class VllmUser(HttpUser):
                         finish_reason = finish
 
                 t_last_token = time.perf_counter()
+                full_response = "".join(full_response_parts)
                 response.success()
 
         except Exception as exc:
             t_last_token = time.perf_counter()
+            full_response = ""
             success      = False
             error_type   = type(exc).__name__
 
@@ -408,6 +421,12 @@ class VllmUser(HttpUser):
             itl_p50       = _percentile(inter_token_times, 50) if inter_token_times else None
             itl_p99       = _percentile(inter_token_times, 99) if inter_token_times else None
 
+        # Extract the last user message as the human-readable prompt
+        prompt_text = next(
+            (m["content"] for m in reversed(messages) if m.get("role") == "user"),
+            "",
+        )
+
         _custom_rows.append({
             "timestamp":     t_request_sent,
             "category":      category,
@@ -421,6 +440,16 @@ class VllmUser(HttpUser):
             "finish_reason": finish_reason,
             "success":       success,
             "error_type":    error_type,
+        })
+
+        _response_rows.append({
+            "timestamp":     t_request_sent,
+            "category":      category,
+            "prompt":        prompt_text,
+            "response":      full_response,
+            "output_tokens": output_tokens,
+            "finish_reason": finish_reason,
+            "success":       success,
         })
 
 
@@ -442,32 +471,46 @@ def _percentile(data: list[float], pct: int) -> float:
 @events.test_stop.add_listener
 def _on_test_stop(environment, **kwargs):
     _write_custom_metrics(environment)
+    _write_responses(environment)
+
+
+# Fixed paths on the pod — run_experiment.sh retrieves them with kubectl cp
+_RESPONSES_POD_PATH    = Path("/tmp/locust_responses.jsonl")
+_CUSTOM_METRICS_POD_PATH = Path("/tmp/locust_custom_metrics.csv")
+
+
+def _write_responses(environment):
+    """Write prompt/response pairs to a JSONL file on the master pod."""
+    if isinstance(environment.runner, WorkerRunner):
+        return
+
+    if not _response_rows:
+        return
+
+    with open(_RESPONSES_POD_PATH, "w", encoding="utf-8") as f:
+        for row in _response_rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    print(f"[benchmarking] Prompt/response log written to: {_RESPONSES_POD_PATH} "
+          f"({len(_response_rows)} entries)")
 
 
 def _write_custom_metrics(environment):
-    # Workers collect rows but don't write — only the master (or standalone) does
+    """Write custom per-request metrics to a CSV file on the master pod."""
     if isinstance(environment.runner, WorkerRunner):
         return
 
     if not _custom_rows:
         return
 
-    results_dir = Path(__file__).parent / "results"
-    results_dir.mkdir(exist_ok=True)
-
-    if CSV_PREFIX:
-        out_path = Path(f"{CSV_PREFIX}_custom_metrics.csv")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-    else:
-        out_path = results_dir / f"custom_metrics_{int(time.time())}.csv"
-
     fieldnames = list(_custom_rows[0].keys())
-    with open(out_path, "w", newline="") as f:
+    with open(_CUSTOM_METRICS_POD_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(_custom_rows)
 
-    print(f"\n[benchmarking] Custom metrics written to: {out_path}")
+    print(f"\n[benchmarking] Custom metrics written to: {_CUSTOM_METRICS_POD_PATH} "
+          f"({len(_custom_rows)} rows)")
     _print_summary(_custom_rows)
 
 
