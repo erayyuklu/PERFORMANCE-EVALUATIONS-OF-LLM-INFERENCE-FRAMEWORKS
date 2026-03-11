@@ -1,9 +1,16 @@
 [
-  {
+    {
     "name": "baseline",
     "description": "Baseline experiment with default settings.",
     "vllm_extra_args": "",
-    "concurrency": [4, 8, 16, 32],
+    "concurrency": [4, 32],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "quantization",
+    "description": "Experiment with quantization enabled.",
+    "vllm_extra_args": "--quantization fp8",
+    "concurrency": [4, 32],
     "prompt_categories": ["all"]
   }
 ]

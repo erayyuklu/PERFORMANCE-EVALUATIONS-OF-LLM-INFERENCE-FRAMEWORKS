@@ -1,0 +1,12 @@
+{
+  "name": "quantization",
+  "description": "Experiment with quantization enabled.",
+  "vllm_extra_args": "--quantization fp8",
+  "concurrency": [
+    4,
+    32
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}
