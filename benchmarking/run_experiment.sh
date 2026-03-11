@@ -31,6 +31,7 @@ RESULTS_BASE="${SCRIPT_DIR}/results"
 NAMESPACE="${K8S_NAMESPACE:-vllm}"
 DEPLOYMENT_NAME="vllm-server"
 PORT_FORWARD_PID=""
+PROM_PORT_FORWARD_PID=""
 DRY_RUN=false
 
 # ---------------------------------------------------------------------------
@@ -56,6 +57,10 @@ cleanup() {
   if [[ -n "${PORT_FORWARD_PID}" ]]; then
     kill "${PORT_FORWARD_PID}" 2>/dev/null || true
     log "Port-forward to Locust master stopped."
+  fi
+  if [[ -n "${PROM_PORT_FORWARD_PID}" ]]; then
+    kill "${PROM_PORT_FORWARD_PID}" 2>/dev/null || true
+    log "Port-forward to Prometheus stopped."
   fi
 }
 trap cleanup EXIT
@@ -159,12 +164,31 @@ ensure_locust_ready() {
   for attempt in $(seq 1 15); do
     if curl -sf "${LOCUST_MASTER_URL}/" &>/dev/null; then
       info "Locust master is reachable at ${LOCUST_MASTER_URL}."
-      return 0
+      break
     fi
     info "Waiting for Locust master to become reachable (attempt ${attempt}/15)..."
     sleep 2
   done
-  echo "ERROR: Locust master at ${LOCUST_MASTER_URL} is not reachable after port-forward." >&2
+  if ! curl -sf "${LOCUST_MASTER_URL}/" &>/dev/null; then
+    echo "ERROR: Locust master at ${LOCUST_MASTER_URL} is not reachable after port-forward." >&2
+    exit 1
+  fi
+
+  # Start port-forward to Prometheus for metrics fetching
+  log "Starting port-forward to Prometheus (prometheus-server:9090)..."
+  kubectl port-forward svc/prometheus-server 9090:80 -n monitoring &>/dev/null &
+  PROM_PORT_FORWARD_PID=$!
+  info "Prometheus Port-forward PID: ${PROM_PORT_FORWARD_PID}"
+
+  for attempt in $(seq 1 15); do
+    if curl -sf "${PROMETHEUS_URL}/-/ready" &>/dev/null; then
+      info "Prometheus is reachable at ${PROMETHEUS_URL}."
+      return 0
+    fi
+    info "Waiting for Prometheus to become reachable (attempt ${attempt}/15)..."
+    sleep 2
+  done
+  echo "ERROR: Prometheus at ${PROMETHEUS_URL} is not reachable after port-forward." >&2
   exit 1
 }
 
@@ -195,6 +219,10 @@ run_locust() {
 
   log "Triggering in-cluster Locust run (users=${users}, spawn_rate=${effective_spawn_rate}, label=${label})..."
 
+  # Record start timestamp (epoch seconds) for Prometheus query_range
+  local start_ts
+  start_ts=$(date +%s)
+
   # Trigger run via API — fail immediately on curl error
   info "Starting swarm: ${users} users at ${effective_spawn_rate} users/s..."
   curl -sf -X POST "${LOCUST_MASTER_URL}/swarm" \
@@ -213,6 +241,10 @@ run_locust() {
     || { echo "ERROR: Failed to stop Locust swarm (GET /stop)." >&2; exit 1; }
   info "Stopped Locust swarm."
 
+  # Record end timestamp
+  local end_ts
+  end_ts=$(date +%s)
+
   # Download standard Locust CSV exports from master
   curl -sf "${LOCUST_MASTER_URL}/stats/requests/csv" \
     -o "${out_csv}_stats.csv" \
@@ -230,6 +262,15 @@ run_locust() {
     info "Downloaded stats/failures/exceptions CSVs to $(dirname "${out_csv}")/"
     info "stats_history CSV unavailable; continuing without it."
   fi
+
+  # Fetch Prometheus metrics for this run's time window
+  log "Fetching Prometheus metrics for ${label} (${start_ts} → ${end_ts})..."
+  "${SCRIPT_DIR}/fetch_metrics.sh" \
+    --start "${start_ts}" \
+    --end "${end_ts}" \
+    --output "${out_csv}_prometheus_metrics.csv" \
+    --prometheus-url "${PROMETHEUS_URL}" \
+    || log "WARNING: Prometheus metrics fetch failed for ${label}; continuing."
 }
 
 # ---------------------------------------------------------------------------
