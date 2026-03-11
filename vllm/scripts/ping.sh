@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 03-test.sh — Test the vLLM deployment
+# test.sh — Test the vLLM deployment
 #   Usage:
-#     ./03-test.sh              # test via port-forward (default)
-#     ./03-test.sh --external   # test via LoadBalancer external IP
+#     ./test.sh              # test via port-forward (default)
+#     ./test.sh --external   # test via LoadBalancer external IP
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../infra_config.env"
 
 SERVICE_NAME=$(kubectl get svc -n "${K8S_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 

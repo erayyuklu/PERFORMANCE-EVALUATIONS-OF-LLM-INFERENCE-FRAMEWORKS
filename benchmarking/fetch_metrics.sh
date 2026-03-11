@@ -9,7 +9,7 @@
 #                      [--prometheus-url <url>] [--step <interval>]
 #
 # Queries all non-locust metrics displayed on the Grafana dashboard
-# (locust-dashboard.json) and writes them into a single CSV with format:
+# (dashboard.json) and writes them into a single CSV with format:
 #   timestamp,metric_name,labels,value
 #
 # Requires: curl, jq
@@ -48,7 +48,7 @@ log()  { echo "  [fetch_metrics] $*"; }
 
 # ---------------------------------------------------------------------------
 # Metric definitions — each entry is  "column_name|promql"
-# Derived from locust-dashboard.json panels 4–19 (non-locust panels).
+# Derived from dashboard.json panels 4–19 (non-locust panels).
 # ---------------------------------------------------------------------------
 METRICS=(
   # --- vLLM latency histograms (panels 4-7) ---

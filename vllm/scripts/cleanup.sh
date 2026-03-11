@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 04-cleanup.sh — Clean up GKE resources
-# Usage: 04-cleanup.sh [--deployment | --cluster | --all]
+# cleanup.sh — Clean up GKE resources
+# Usage: cleanup.sh [--deployment | --cluster | --all]
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../infra_config.env"
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 

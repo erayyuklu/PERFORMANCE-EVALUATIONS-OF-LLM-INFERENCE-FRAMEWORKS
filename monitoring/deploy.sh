@@ -8,11 +8,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../vllm/infra_config.env"
 
 MONITORING_NS="monitoring"
 HELM_RELEASE="monitoring"
-K8S_DIR="${SCRIPT_DIR}/../k8s"
+K8S_DIR="${SCRIPT_DIR}/k8s"
 
 # Official vLLM dashboard JSON URLs (from vllm-project/vllm on GitHub)
 VLLM_GITHUB_RAW="https://raw.githubusercontent.com/vllm-project/vllm/main/examples/online_serving"
@@ -90,18 +90,18 @@ fi
 
 # 5. Apply ServiceMonitors
 echo "==> Applying ServiceMonitor to scrape vLLM via vllm-service..."
-kubectl apply -n "${MONITORING_NS}" -f "${K8S_DIR}/monitoring/service-monitor.yaml"
+kubectl apply -n "${MONITORING_NS}" -f "${K8S_DIR}/service-monitor.yaml"
 echo "    ✓ ServiceMonitor applied. Prometheus will scrape vLLM via vllm-service:http/metrics."
 
 echo "==> Applying PodMonitor for GKE-managed DCGM exporter (GPU metrics)..."
-kubectl apply -f "${K8S_DIR}/monitoring/dcgm-pod-monitor.yaml"
+kubectl apply -f "${K8S_DIR}/dcgm-pod-monitor.yaml"
 echo "    ✓ DCGM PodMonitor applied. Prometheus will scrape DCGM_FI_DEV_* metrics."
 
 echo "==> Applying ServiceMonitor and Grafana Dashboard for Locust..."
-kubectl apply -f "${K8S_DIR}/locust/service-monitor.yaml" || echo "    ⚠ Could not apply locust ServiceMonitor (is locust namespace created?)"
+kubectl apply -f "${SCRIPT_DIR}/../locust/k8s/service-monitor.yaml" || echo "    ⚠ Could not apply locust ServiceMonitor (is locust namespace created?)"
 kubectl create configmap locust-dashboard \
     --namespace="${MONITORING_NS}" \
-    --from-file=locust-dashboard.json="${K8S_DIR}/monitoring/locust-dashboard.json" \
+    --from-file=dashboard.json="${SCRIPT_DIR}/dashboard.json" \
     --dry-run=client -o yaml | \
 kubectl label --local -f - grafana_dashboard=1 -o yaml | \
 kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \

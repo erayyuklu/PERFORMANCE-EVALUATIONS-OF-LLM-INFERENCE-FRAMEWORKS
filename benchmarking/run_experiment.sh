@@ -19,7 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../gke-deployment/config.env"
+source "${SCRIPT_DIR}/../vllm/infra_config.env"
 source "${SCRIPT_DIR}/config.env"
 
 # ---------------------------------------------------------------------------

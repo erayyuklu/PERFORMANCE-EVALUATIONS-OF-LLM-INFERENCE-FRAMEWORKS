@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 01-setup-cluster.sh — Create GKE cluster with GPU node pool
+# gke.sh — Create GKE cluster with GPU node pool
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../infra_config.env"
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 06-deploy-locust.sh — Build, push, and deploy Locust to GKE
+# deploy.sh — Build, push, and deploy Locust to GKE
 #
 # Usage:
-#   ./06-deploy-locust.sh
+#   ./deploy.sh
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../vllm/infra_config.env"
 
 # 1. Fetch GCP Project ID if not set
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
@@ -26,7 +26,7 @@ echo "==========================================================================
 
 # 2. Build Docker image
 echo "==> Building Locust Docker image..."
-docker build -t "${IMAGE_TAG}" "${SCRIPT_DIR}/../../locust/"
+docker build -t "${IMAGE_TAG}" "${SCRIPT_DIR}/"
 
 # 3. Push to Artifact Registry
 echo "==> Pushing image to Artifact Registry..."
@@ -51,13 +51,13 @@ echo "==> Applying Kubernetes manifests..."
 kubectl create namespace locust --dry-run=client -o yaml | kubectl apply -f -
 kubectl create configmap locust-config \
     --namespace=locust \
-    --from-env-file="${SCRIPT_DIR}/../../locust/config.env" \
+    --from-env-file="${SCRIPT_DIR}/config.env" \
     --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f "${SCRIPT_DIR}/../../locust/k8s/service-master.yaml"
+kubectl apply -f "${SCRIPT_DIR}/k8s/service-master.yaml"
 
 # Master and workers: dynamically replace the generic PROJECT_ID in the YAML
-sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/../../locust/k8s/deployment-master.yaml" | kubectl apply -f -
-sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/../../locust/k8s/deployment-worker.yaml" | kubectl apply -f -
+sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/k8s/deployment-master.yaml" | kubectl apply -f -
+sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/k8s/deployment-worker.yaml" | kubectl apply -f -
 
 # Force pods to pull the newly pushed :latest image
 echo "==> Rolling out new image..."
@@ -67,11 +67,11 @@ kubectl rollout status deployment/locust-master -n locust --timeout=360s
 kubectl rollout status deployment/locust-worker -n locust --timeout=360s
 
 # Monitoring manifests (won't hurt to re-apply if 05-monitoring.sh already did)
-kubectl apply -f "${SCRIPT_DIR}/../../locust/k8s/service-monitor.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping service-monitor"
+kubectl apply -f "${SCRIPT_DIR}/k8s/service-monitor.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping service-monitor"
 kubectl delete configmap locust-dashboard --namespace=monitoring --ignore-not-found 2>/dev/null || true
 kubectl create configmap locust-dashboard \
     --namespace=monitoring \
-    --from-file=locust-dashboard.json="${SCRIPT_DIR}/../k8s/monitoring/locust-dashboard.json" \
+    --from-file=dashboard.json="${SCRIPT_DIR}/../monitoring/dashboard.json" \
     --dry-run=client -o yaml | \
 kubectl label --local -f - grafana_dashboard=1 -o yaml | \
 kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 02-deploy-vllm.sh — Deploy vLLM to the GKE cluster
+# deploy.sh — Deploy vLLM to the GKE cluster
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../infra_config.env"
 
 # Source secrets if available
 SECRETS_FILE="${SCRIPT_DIR}/../secrets.env"

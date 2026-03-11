@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 00-prerequisites.sh — Validate required tools and enable GCP APIs
+# prerequisites.sh — Validate required tools and enable GCP APIs
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../infra_config.env"
 
 # Resolve project ID
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"

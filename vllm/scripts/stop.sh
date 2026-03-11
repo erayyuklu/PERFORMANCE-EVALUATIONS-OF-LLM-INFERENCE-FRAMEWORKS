@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 06-stop.sh — Pause the cluster to stop GPU charges without losing resources
+# stop.sh — Pause the cluster to stop GPU charges without losing resources
 #
 # What this does:
 #   --pause   Scale GPU node pool to 0 (stops VM charges, keeps disk & pool config)
@@ -16,13 +16,13 @@
 #   ✓ Nvidia L4 GPU reservation
 #
 # Note: The GKE control plane (e2-medium system pool) continues to run at
-#       minimal cost. Delete the cluster entirely with 04-cleanup.sh --all
+#       minimal cost. Delete the cluster entirely with cleanup.sh --all
 #       if you want zero cost.
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../config.env"
+source "${SCRIPT_DIR}/../infra_config.env"
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 
@@ -43,7 +43,7 @@ check_cluster() {
 
     if [ -z "${EXISTING}" ]; then
         echo "ERROR: Cluster '${CLUSTER_NAME}' not found in zone '${ZONE}'."
-        echo "       Run 01-gke.sh first to create it."
+        echo "       Run gke.sh first to create it."
         exit 1
     fi
 }
@@ -81,7 +81,7 @@ pause_cluster() {
     echo "  Persistent disks and cluster configuration are intact."
     echo ""
     echo "  To resume:  bash $(basename "$0") --resume"
-    echo "  To destroy: bash 04-cleanup.sh --all"
+    echo "  To destroy: bash cleanup.sh --all"
 }
 
 resume_cluster() {
@@ -123,7 +123,7 @@ resume_cluster() {
     echo ""
     kubectl get nodes
     echo ""
-    echo "  Re-deploy workloads: bash 02-deploy.sh"
+    echo "  Re-deploy workloads: bash deploy.sh"
 }
 
 if [ $# -eq 0 ]; then
