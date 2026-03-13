@@ -37,6 +37,7 @@ import csv
 import json
 import os
 import random
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -327,8 +328,12 @@ _PROMPTS: list[dict] = _load_dataset()
 # ---------------------------------------------------------------------------
 def _stream_tokens(response):
     """
-    Parse an SSE stream from vLLM and yield (token_text, finish_reason) tuples.
-    Each SSE data line is a JSON chunk with choices[0].delta.content.
+    Parse an SSE stream from vLLM and yield
+    (content_text, reasoning_text, finish_reason) tuples.
+
+    Some reasoning-capable models stream chain-of-thought in
+    choices[0].delta.reasoning_content while final answer tokens are in
+    choices[0].delta.content.
     """
     client = sseclient.SSEClient(response)
     for event in client.events():
@@ -338,11 +343,28 @@ def _stream_tokens(response):
             chunk = json.loads(event.data)
         except json.JSONDecodeError:
             continue
-        choice = chunk["choices"][0]
-        delta  = choice.get("delta", {})
-        text   = delta.get("content", "")
+        choices = chunk.get("choices", [])
+        if not choices:
+            continue
+
+        choice = choices[0]
+        delta = choice.get("delta", {})
+        content_text = delta.get("content", "") or ""
+        reasoning_text = (
+            delta.get("reasoning_content")
+            or delta.get("reasoning")
+            or ""
+        )
         finish = choice.get("finish_reason")
-        yield text, finish
+        yield content_text, reasoning_text, finish
+
+
+def _split_thinking_from_content(content_text: str) -> tuple[str, str]:
+    """Extract <think>...</think> blocks if a model embeds reasoning inline."""
+    m = re.search(r"<think>\s*(.*?)\s*</think>\s*(.*)", content_text, flags=re.DOTALL | re.IGNORECASE)
+    if not m:
+        return "", content_text
+    return m.group(1).strip(), m.group(2).lstrip()
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +396,8 @@ class VllmUser(HttpUser):
         finish_reason  = None
         success        = True
         error_type     = None
+        reasoning_text = ""
+        response_text  = ""
 
         try:
             with self.client.post(
@@ -394,18 +418,24 @@ class VllmUser(HttpUser):
                     return
 
                 t_prev = None
-                full_response_parts: list[str] = []
-                for token_text, finish in _stream_tokens(response):
+                reasoning_parts: list[str] = []
+                response_parts: list[str] = []
+                for content_piece, reasoning_piece, finish in _stream_tokens(response):
                     t_now = time.perf_counter()
 
-                    if t_first_token is None:
+                    emitted_any = bool(content_piece or reasoning_piece)
+                    if t_first_token is None and emitted_any:
                         t_first_token = t_now
 
-                    if t_prev is not None and token_text:
+                    if t_prev is not None and emitted_any:
                         inter_token_times.append((t_now - t_prev) * 1000)  # ms
 
-                    if token_text:
-                        full_response_parts.append(token_text)
+                    if reasoning_piece:
+                        reasoning_parts.append(reasoning_piece)
+                    if content_piece:
+                        response_parts.append(content_piece)
+
+                    if emitted_any:
                         output_tokens += 1
                         t_prev = t_now
 
@@ -413,12 +443,21 @@ class VllmUser(HttpUser):
                         finish_reason = finish
 
                 t_last_token = time.perf_counter()
-                full_response = "".join(full_response_parts)
+                reasoning_text = "".join(reasoning_parts)
+                response_text = "".join(response_parts)
+
+                # Fallback for models that put reasoning inside <think>...</think>
+                # in the normal content stream.
+                if not reasoning_text and response_text:
+                    extracted_reasoning, cleaned_response = _split_thinking_from_content(response_text)
+                    if extracted_reasoning:
+                        reasoning_text = extracted_reasoning
+                        response_text = cleaned_response
+
                 response.success()
 
         except Exception as exc:
             t_last_token = time.perf_counter()
-            full_response = ""
             success      = False
             error_type   = type(exc).__name__
 
@@ -443,11 +482,17 @@ class VllmUser(HttpUser):
             "",
         )
 
-        if "</think>" in full_response:
-            reasoning_text, response_text = full_response.split("</think>", 1)
-        else:
-            reasoning_text = ""
-            response_text = full_response
+        input_messages = [
+            {"role": m.get("role", ""), "content": m.get("content", "")}
+            for m in messages
+        ]
+        assistant_message = {
+            "role": "assistant",
+            "content": response_text,
+        }
+        if reasoning_text:
+            assistant_message["reasoning"] = reasoning_text
+        conversation = input_messages + [assistant_message]
 
         _custom_rows.append({
             "timestamp":     t_request_sent,
@@ -467,6 +512,7 @@ class VllmUser(HttpUser):
         _response_rows.append({
             "timestamp":     t_request_sent,
             "category":      category,
+            "conversation":  conversation,
             "prompt":        prompt_text,
             "reasoning":     reasoning_text,
             "response":      response_text,
