@@ -49,7 +49,7 @@ curl -s "${BASE_URL}/v1/chat/completions" \
         \"messages\": [
             {
                 \"role\": \"user\",
-                \"content\": \"Write the controller layer for a REST API endpoint in Spring Boot. The endpoint should handle GET requests to retrieve a list of users.\"\
+                \"content\": \"What is the capital of France?\"\
             }
         ],
         \"max_tokens\": 2048,

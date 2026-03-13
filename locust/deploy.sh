@@ -62,21 +62,13 @@ sed "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/k8s/deployment-worker.yaml" | 
 # Force pods to pull the newly pushed :latest image
 echo "==> Rolling out new image..."
 kubectl rollout restart deployment/locust-master -n locust
-kubectl rollout restart deployment/locust-worker -n locust
 kubectl rollout status deployment/locust-master -n locust --timeout=360s
-kubectl rollout status deployment/locust-worker -n locust --timeout=360s
 
-# Monitoring manifests (won't hurt to re-apply if 05-monitoring.sh already did)
-kubectl apply -f "${SCRIPT_DIR}/k8s/service-monitor.yaml" 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping service-monitor"
-kubectl delete configmap locust-dashboard --namespace=monitoring --ignore-not-found 2>/dev/null || true
-kubectl create configmap locust-dashboard \
-    --namespace=monitoring \
-    --from-file=dashboard.json="${SCRIPT_DIR}/../monitoring/dashboard.json" \
-    --dry-run=client -o yaml | \
-kubectl label --local -f - grafana_dashboard=1 -o yaml | \
-kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \
-kubectl apply -f - 2>/dev/null || echo "    ⚠ Monitoring not ready, skipping dashboard configmap"
-kubectl rollout restart deployment -n monitoring -l app.kubernetes.io/name=grafana 2>/dev/null || echo "    ⚠ Grafana not found, skipping restart"
+echo "Waiting for master to be fully ready before restarting workers..."
+sleep 150
+
+kubectl rollout restart deployment/locust-worker -n locust
+kubectl rollout status deployment/locust-worker -n locust --timeout=360s
 
 echo ""
 echo "==========================================================================="

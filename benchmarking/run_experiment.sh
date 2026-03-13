@@ -37,6 +37,8 @@ DRY_RUN=false
 ROLLOUT_SEC="${ROLLOUT_SEC:-900}"
 # Maximum time to wait for Locust to drain in-flight requests after /stop.
 LOCUST_STOP_WAIT_SEC="${LOCUST_STOP_WAIT_SEC:-300}"
+# Directory inside worker containers where per-request artifacts are written.
+WORKER_ARTIFACTS_DIR="${WORKER_ARTIFACTS_DIR:-/tmp}"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -341,7 +343,7 @@ run_locust() {
       tmp_jsonl="${pod}_responses.jsonl"
 
       # Custom metrics CSV — first worker becomes the file, rest are appended (no header)
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:/tmp/locust_custom_metrics.csv" "${tmp_csv}"; then
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_custom_metrics.csv" "${tmp_csv}"; then
         if [[ "${first_worker}" == "true" ]]; then
           mv "${tmp_csv}" "${out_csv}_custom_metrics.csv"
           first_worker=false
@@ -355,7 +357,7 @@ run_locust() {
       fi
 
       # Prompt/response JSONL — simply concatenate
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:/tmp/locust_responses.jsonl" "${tmp_jsonl}"; then
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_responses.jsonl" "${tmp_jsonl}"; then
         cat "${tmp_jsonl}" >> "${out_csv}_prompt_responses.jsonl"
         rm -f "${tmp_jsonl}"
         info "Prompt/response log copied from ${pod}."

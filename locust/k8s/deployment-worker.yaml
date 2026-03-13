@@ -41,6 +41,9 @@ spec:
             - "--master-host=locust-master"
             - "-f"
             - "/locust/locustfile.py"
+          volumeMounts:
+            - name: worker-artifacts
+              mountPath: /locust-artifacts
           env:
             - name: VLLM_MODEL_NAME
               valueFrom:
@@ -87,7 +90,15 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: VLLM_PROMPT_LEN
+            - name: LOCUST_ARTIFACTS_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: LOCUST_ARTIFACTS_DIR
           resources:
             requests:
               cpu: "100m"
               memory: "128Mi"
+      volumes:
+        - name: worker-artifacts
+          emptyDir: {}

@@ -30,6 +30,7 @@ Environment variables:
                                short < 200 chars | medium < 1000 chars | long ≥ 1000 chars
                              For custom: matched against the 'category' field in the record
     LOCUST_PROMETHEUS_PORT — port for the Prometheus /metrics endpoint (default: 9646)
+    LOCUST_ARTIFACTS_DIR   — directory for worker artifact files (default: /tmp)
 """
 
 import csv
@@ -88,6 +89,7 @@ CUSTOM_DATASET_PATH = Path(os.getenv("CUSTOM_DATASET_PATH", _DEFAULT_CUSTOM))
 
 PROMPT_LEN      = os.getenv("VLLM_PROMPT_LEN", "all")  # short | medium | long | all
 PROMETHEUS_PORT = int(os.getenv("LOCUST_PROMETHEUS_PORT", "9646"))
+ARTIFACTS_DIR   = Path(os.getenv("LOCUST_ARTIFACTS_DIR", "/tmp"))
 
 # Character thresholds for PROMPT_LEN categorisation (first human turn length)
 _LEN_THRESHOLDS = {"short": 200, "medium": 1000}  # < short → short, < medium → medium, else long
@@ -496,8 +498,8 @@ def _on_test_stop(environment, **kwargs):
 
 
 # Fixed paths on the pod — run_experiment.sh retrieves them with kubectl cp
-_RESPONSES_POD_PATH    = Path("/tmp/locust_responses.jsonl")
-_CUSTOM_METRICS_POD_PATH = Path("/tmp/locust_custom_metrics.csv")
+_RESPONSES_POD_PATH      = ARTIFACTS_DIR / "locust_responses.jsonl"
+_CUSTOM_METRICS_POD_PATH = ARTIFACTS_DIR / "locust_custom_metrics.csv"
 
 
 def _write_responses(environment):
@@ -513,6 +515,8 @@ def _write_responses(environment):
     if not _response_rows:
         logger.info("[benchmarking] No prompt/response data to write.")
         return
+
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
     with open(_RESPONSES_POD_PATH, "w", encoding="utf-8") as f:
         for row in _response_rows:
@@ -536,6 +540,8 @@ def _write_custom_metrics(environment):
 
     if not _custom_rows:
         return
+
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
     fieldnames = list(_custom_rows[0].keys())
     with open(_CUSTOM_METRICS_POD_PATH, "w", newline="", encoding="utf-8") as f:
