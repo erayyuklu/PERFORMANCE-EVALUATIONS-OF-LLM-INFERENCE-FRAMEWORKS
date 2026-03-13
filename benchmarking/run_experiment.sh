@@ -35,6 +35,8 @@ PROM_PORT_FORWARD_PID=""
 DRY_RUN=false
 # Estimated time for a vLLM deployment rollout (seconds). Default: 15 minutes
 ROLLOUT_SEC="${ROLLOUT_SEC:-900}"
+# Maximum time to wait for Locust to drain in-flight requests after /stop.
+LOCUST_STOP_WAIT_SEC="${LOCUST_STOP_WAIT_SEC:-300}"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -220,6 +222,43 @@ wait_for_swarm_running() {
   exit 1
 }
 
+# Poll until Locust reports no active users after /stop.
+wait_for_swarm_stopped() {
+  local timeout_sec="${1}"
+  local max_attempts=$(( timeout_sec / 2 ))
+  local attempt
+
+  if (( max_attempts < 1 )); then
+    max_attempts=1
+  fi
+
+  for attempt in $(seq 1 "${max_attempts}"); do
+    local stats_json state user_count
+    stats_json=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null || true)
+
+    if [[ -z "${stats_json}" ]]; then
+      info "Locust stats endpoint temporarily unreachable while draining (attempt ${attempt}/${max_attempts})..."
+      sleep 2
+      continue
+    fi
+
+    state=$(echo "${stats_json}" | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
+    user_count=$(echo "${stats_json}" | jq -r '.user_count // -1' 2>/dev/null || echo "-1")
+
+    if [[ "${state}" == "ready" || "${state}" == "stopped" || "${user_count}" == "0" ]]; then
+      info "Swarm has stopped (state=${state}, users=${user_count})."
+      return 0
+    fi
+
+    info "Waiting for graceful stop drain (state=${state}, users=${user_count}, attempt ${attempt}/${max_attempts})..."
+    sleep 2
+  done
+
+  log "WARNING: Locust swarm did not report stopped within ${timeout_sec}s after /stop."
+  log "WARNING: Continuing with artifact collection to avoid dropping this experiment run."
+  return 0
+}
+
 run_locust() {
   local users="$1"
   local label="$2"
@@ -248,7 +287,8 @@ run_locust() {
   # Stop the swarm
   curl -sf -X GET "${LOCUST_MASTER_URL}/stop" > /dev/null \
     || { echo "ERROR: Failed to stop Locust swarm (GET /stop)." >&2; exit 1; }
-  info "Stopped Locust swarm."
+  info "Stop signal sent. Waiting for graceful drain..."
+  wait_for_swarm_stopped "${LOCUST_STOP_WAIT_SEC}"
 
   # Record end timestamp
   local end_ts

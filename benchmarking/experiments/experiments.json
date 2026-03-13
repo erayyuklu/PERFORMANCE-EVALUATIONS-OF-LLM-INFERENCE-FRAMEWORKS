@@ -3,14 +3,36 @@
     "name": "baseline",
     "description": "Baseline experiment with default settings.",
     "vllm_extra_args": "",
-    "concurrency": [4, 32],
+    "concurrency": [4, 32, 64],
     "prompt_categories": ["all"]
   },
   {
-    "name": "quantization",
+    "name": "fp8_quantization",
     "description": "Experiment with quantization enabled.",
     "vllm_extra_args": "--quantization fp8",
-    "concurrency": [4, 32],
+    "concurrency": [4, 32, 64],
+    "prompt_categories": ["all"]
+  }
+  ,
+  {
+    "name": "awq_quantization",
+    "description": "Experiment with AWQ quantization (4-bit).",
+    "vllm_extra_args": "--quantization awq",
+    "concurrency": [4, 32, 64],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "gptq_quantization",
+    "description": "Experiment with GPTQ quantization (4-bit).",
+    "vllm_extra_args": "--quantization gptq",
+    "concurrency": [4, 32, 64],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "bitsandbytes_quantization",
+    "description": "Experiment with bitsandbytes quantization (4/8-bit variants).",
+    "vllm_extra_args": "--quantization bitsandbytes",
+    "concurrency": [4, 32, 64],
     "prompt_categories": ["all"]
   }
 ]

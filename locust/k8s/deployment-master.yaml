@@ -46,6 +46,8 @@ spec:
             - "--master"
             - "-f"
             - "/locust/locustfile.py"
+            - "--stop-timeout"
+            - "$(LOCUST_STOP_TIMEOUT)"
             - "--csv=/tmp/locust"
             - "--csv-full-history"
           ports:
@@ -113,6 +115,11 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: LOCUST_PROMETHEUS_PORT
+            - name: LOCUST_STOP_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: LOCUST_STOP_TIMEOUT
           resources:
             requests:
               cpu: "100m"
