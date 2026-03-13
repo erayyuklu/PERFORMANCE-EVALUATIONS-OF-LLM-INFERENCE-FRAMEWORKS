@@ -1,0 +1,12 @@
+{
+  "name": "bitsandbytes_quantization",
+  "description": "Experiment with bitsandbytes quantization (4/8-bit variants).",
+  "vllm_extra_args": "",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}

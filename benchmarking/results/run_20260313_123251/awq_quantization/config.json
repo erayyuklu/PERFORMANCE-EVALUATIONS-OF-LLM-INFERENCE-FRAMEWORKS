@@ -1,0 +1,12 @@
+{
+  "name": "awq_quantization",
+  "description": "Experiment with AWQ quantization (4-bit).",
+  "vllm_extra_args": "--quantization awq",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "all"
+  ]
+}
