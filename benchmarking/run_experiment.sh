@@ -63,18 +63,35 @@ info() { echo "    $*"; }
 
 stop_locust_swarm_on_exit() {
   # Cleanup is best-effort; never fail hard while exiting.
-  [[ -n "${PORT_FORWARD_PID}" ]] || return 0
-
+  # Use kubectl exec instead of the port-forward, because SIGINT (Ctrl-C)
+  # kills the background port-forward processes before this trap fires.
   log "Stopping Locust swarm before shutting down port-forwards..."
-  if ! curl -f --max-time 3 -X GET "${LOCUST_MASTER_URL}/stop" >/dev/null; then
-    info "Could not send stop signal to Locust swarm during cleanup."
+
+  local master_pod
+  master_pod=$(kubectl get pod -n "${LOCUST_NAMESPACE}" \
+    -l app=locust,role=master \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+
+  if [[ -z "${master_pod}" ]]; then
+    info "Could not find Locust master pod; skipping swarm stop."
     return 0
+  fi
+
+  # Send stop signal directly inside the pod (using Python since curl might be missing)
+  local exec_output
+  if exec_output=$(kubectl exec -n "${LOCUST_NAMESPACE}" "${master_pod}" -- python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8089/stop')" 2>&1); then
+    info "Successfully sent stop signal to Locust master pod."
+  else
+    info "Warning: Failed to send stop signal to Locust master pod."
+    info "Exec output: ${exec_output}"
   fi
 
   local waited=0
   local state="unknown"
   while (( waited < LOCUST_STOP_WAIT_SEC )); do
-    state=$(curl -f --max-time 3 "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
+    # Fetch stats via Python, then pipe resulting JSON to jq locally
+    state=$(kubectl exec -n "${LOCUST_NAMESPACE}" "${master_pod}" -- \
+      python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8089/stats/requests', timeout=3).read().decode('utf-8'))" 2>/dev/null \
       | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
 
     if [[ "${state}" != "running" && "${state}" != "spawning" ]]; then
