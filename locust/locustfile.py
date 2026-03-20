@@ -26,8 +26,8 @@ Environment variables:
     SHAREGPT_MIN_TURNS     — minimum human+gpt turn pairs to include a conversation (default: 1)
     CUSTOM_DATASET_PATH    — path to your custom dataset JSON (default: prompts/dataset.json)
     VLLM_PROMPT_LEN        — filter by prompt category: short | medium | long | all (default: all)
-                             For ShareGPT: derived from first human turn char length
-                               short < 200 chars | medium < 1000 chars | long ≥ 1000 chars
+                                                         For ShareGPT: derived from total conversation character length
+                                                             short < 200 chars | medium < 1000 chars | long ≥ 1000 chars
                              For custom: matched against the 'category' field in the record
     LOCUST_PROMETHEUS_PORT — port for the Prometheus /metrics endpoint (default: 9646)
     LOCUST_ARTIFACTS_DIR   — directory for worker artifact files (default: /tmp)
@@ -70,7 +70,7 @@ except ImportError:
 # Configuration
 # ---------------------------------------------------------------------------
 MODEL_NAME      = os.getenv("VLLM_MODEL_NAME",   "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
-MAX_TOKENS      = int(os.getenv("VLLM_MAX_TOKENS",    "256"))
+MAX_TOKENS      = int(os.getenv("VLLM_MAX_TOKENS",    "2048"))
 TEMPERATURE     = float(os.getenv("VLLM_TEMPERATURE",  "0.0"))
 REQUEST_TIMEOUT = float(os.getenv("VLLM_REQUEST_TIMEOUT", "180"))
 
@@ -92,7 +92,7 @@ PROMPT_LEN      = os.getenv("VLLM_PROMPT_LEN", "all")  # short | medium | long |
 PROMETHEUS_PORT = int(os.getenv("LOCUST_PROMETHEUS_PORT", "9646"))
 ARTIFACTS_DIR   = Path(os.getenv("LOCUST_ARTIFACTS_DIR", "/tmp"))
 
-# Character thresholds for PROMPT_LEN categorisation (first human turn length)
+# Character thresholds for PROMPT_LEN categorisation (total conversation length)
 _LEN_THRESHOLDS = {"short": 200, "medium": 1000}  # < short → short, < medium → medium, else long
 
 # Aggregated custom metrics — populated on workers, written to file on test_stop
@@ -188,12 +188,11 @@ def _download_sharegpt() -> None:
     logger.info(f"[benchmarking] ShareGPT dataset saved to {SHAREGPT_PATH}")
 
 
-def _categorise(first_human_text: str) -> str:
-    """Return short / medium / long based on first human turn character length."""
-    n = len(first_human_text)
-    if n < _LEN_THRESHOLDS["short"]:
+def _categorise(prompt_length) -> str:
+    """Return short / medium / long based on total conversation length."""
+    if prompt_length < _LEN_THRESHOLDS["short"]:
         return "short"
-    if n < _LEN_THRESHOLDS["medium"]:
+    if prompt_length < _LEN_THRESHOLDS["medium"]:
         return "medium"
     return "long"
 
@@ -228,27 +227,26 @@ def _load_sharegpt() -> list[dict]:
             continue
 
         messages = []
-        first_human_text = ""
         for turn in turns:
             role = role_map.get(turn.get("from", ""), None)
             text = turn.get("value", "").strip()
             if not role or not text:
                 continue
-            if role == "user" and not first_human_text:
-                first_human_text = text
             messages.append({"role": role, "content": text})
 
-        if not first_human_text or not messages:
+        if not messages:
             continue
 
-        category = _categorise(first_human_text)
+        # Use total conversation character count (all messages) for categorisation
+        total_chars = sum(len(m.get("content", "")) for m in messages)
+        category = _categorise(total_chars)
         if PROMPT_LEN != "all" and category != PROMPT_LEN:
             continue
 
         prompts.append({
             "messages":     messages,
             "category":     category,
-            "approx_chars": len(first_human_text),
+            "approx_chars": total_chars,
         })
 
     if not prompts:
@@ -382,11 +380,12 @@ class VllmUser(HttpUser):
 
         payload = {
             "model":       MODEL_NAME,
-            "messages":    messages,
-            "max_tokens":  MAX_TOKENS,
+            "messages":    messages[:-1],  # all but the last message for the prompt, to avoid leaking the final gpt response in the prompt
             "stream":      True,
             "temperature": TEMPERATURE,
         }
+        if MAX_TOKENS > 0:
+            payload["max_tokens"] = MAX_TOKENS
 
         t_request_sent = time.perf_counter()
         t_first_token  = None
@@ -482,17 +481,10 @@ class VllmUser(HttpUser):
             "",
         )
 
-        input_messages = [
+        conversation = [
             {"role": m.get("role", ""), "content": m.get("content", "")}
             for m in messages
         ]
-        assistant_message = {
-            "role": "assistant",
-            "content": response_text,
-        }
-        if reasoning_text:
-            assistant_message["reasoning"] = reasoning_text
-        conversation = input_messages + [assistant_message]
 
         _custom_rows.append({
             "timestamp":     t_request_sent,

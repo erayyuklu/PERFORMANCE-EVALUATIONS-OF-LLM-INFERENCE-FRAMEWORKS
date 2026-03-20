@@ -59,7 +59,38 @@ done
 log()  { echo "==> $*"; }
 info() { echo "    $*"; }
 
+stop_locust_swarm_on_exit() {
+  # Cleanup is best-effort; never fail hard while exiting.
+  [[ -n "${PORT_FORWARD_PID}" ]] || return 0
+
+  log "Stopping Locust swarm before shutting down port-forwards..."
+  if ! curl -f --max-time 3 -X GET "${LOCUST_MASTER_URL}/stop" >/dev/null; then
+    info "Could not send stop signal to Locust swarm during cleanup."
+    return 0
+  fi
+
+  local waited=0
+  local state="unknown"
+  while (( waited < LOCUST_STOP_WAIT_SEC )); do
+    state=$(curl -f --max-time 3 "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
+      | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
+
+    if [[ "${state}" != "running" && "${state}" != "spawning" ]]; then
+      info "Locust swarm state after stop: ${state}."
+      return 0
+    fi
+
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+
+  info "Locust swarm still active after ${LOCUST_STOP_WAIT_SEC}s; continuing cleanup."
+}
+
 cleanup() {
+  set +e
+  stop_locust_swarm_on_exit
+
   if [[ -n "${PORT_FORWARD_PID}" ]]; then
     kill "${PORT_FORWARD_PID}" 2>/dev/null || true
     log "Port-forward to Locust master stopped."
