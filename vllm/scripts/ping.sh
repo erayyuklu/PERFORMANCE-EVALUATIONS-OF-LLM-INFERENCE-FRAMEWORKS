@@ -24,6 +24,15 @@ SERVICE_PORT=$(kubectl get svc "${SERVICE_NAME}" -n "${K8S_NAMESPACE}" \
 BASE_URL="http://${EXTERNAL_IP}:${SERVICE_PORT}"
 echo "Testing against external IP: ${EXTERNAL_IP} (port ${SERVICE_PORT})"
 
+# Helper: current time in milliseconds (portable)
+now_ms() {
+    if date +%s%3N >/dev/null 2>&1; then
+        date +%s%3N
+    else
+        printf '%s\n' $(($(date +%s%N)/1000000))
+    fi
+}
+
 # --- Test: List models ---
 echo ""
 echo "=== GET /v1/models ==="
@@ -42,7 +51,8 @@ echo "Detected model: ${MODEL_NAME}"
 # --- Test: Completions ---
 echo ""
 echo "=== POST /v1/chat/completions ==="
-curl -s "${BASE_URL}/v1/chat/completions" \
+start_ts=$(now_ms)
+CHAT_RESPONSE=$(curl -s "${BASE_URL}/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{
         \"model\": \"${MODEL_NAME}\",
@@ -51,10 +61,14 @@ curl -s "${BASE_URL}/v1/chat/completions" \
                 \"role\": \"user\",
                 \"content\": \"What is the capital of France?\"\
             }
-        ],
-        \"max_tokens\": 2048,
-        \"temperature\": 0
-    }"
+        ]
+    }")
+end_ts=$(now_ms)
+
+echo "${CHAT_RESPONSE}"
+elapsed_ms=$((end_ts - start_ts))
+echo ""
+echo "E2E latency (chat request): ${elapsed_ms} ms"
 echo ""
 
 echo ""
