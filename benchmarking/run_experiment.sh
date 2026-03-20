@@ -5,6 +5,7 @@
 # Usage:
 #   ./run_experiment.sh [--experiment-file experiments.json]
 #                       [--experiment <name>] [--run-time <duration>]
+#                       [--spawn-time <duration>]
 #                       [--dry-run]
 #
 # What this script does for each experiment configuration:
@@ -48,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --experiment-file) EXPERIMENT_FILE="$2";   shift 2 ;;
     --experiment)      EXPERIMENT_NAME="$2";   shift 2 ;;
     --run-time)        LOCUST_RUN_TIME="$2";   shift 2 ;;
+    --spawn-time)      SPAWN_TIME="$2";        shift 2 ;;
     --dry-run)         DRY_RUN=true;           shift   ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
@@ -239,8 +241,12 @@ ensure_locust_ready() {
 # Poll until Locust reports state == "running", then return.
 # This ensures the sleep timer starts only after ramp-up is complete.
 wait_for_swarm_running() {
+  local timeout_sec="$1"
+  local attempts
+  attempts=$(awk -v timeout="${timeout_sec}" 'BEGIN { a = int((timeout + 1) / 2); if (a < 1) a = 1; print a }')
+
   local attempt
-  for attempt in $(seq 1 30); do
+  for attempt in $(seq 1 "${attempts}"); do
     local state
     state=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
               | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
@@ -248,18 +254,85 @@ wait_for_swarm_running() {
       info "Swarm is running."
       return 0
     fi
-    info "Waiting for swarm to reach 'running' state (current: ${state}, attempt ${attempt}/30)..."
+    info "Waiting for swarm to reach 'running' state (current: ${state}, attempt ${attempt}/${attempts})..."
     sleep 2
   done
-  echo "ERROR: Locust swarm did not reach 'running' state within 60s." >&2
+  echo "ERROR: Locust swarm did not reach 'running' state within ${timeout_sec}s." >&2
   exit 1
+}
+
+parse_duration_seconds() {
+  local value="$1"
+
+  if [[ -z "${value}" ]]; then
+    echo ""
+    return 0
+  fi
+
+  if [[ "${value}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    printf '%s' "${value}"
+    return 0
+  fi
+
+  if [[ "${value}" =~ ^([0-9]+([.][0-9]+)?)([smh])$ ]]; then
+    local num="${BASH_REMATCH[1]}"
+    local unit="${BASH_REMATCH[3]}"
+    case "${unit}" in
+      s) awk -v n="${num}" 'BEGIN { printf "%.6f", n }' ;;
+      m) awk -v n="${num}" 'BEGIN { printf "%.6f", n * 60 }' ;;
+      h) awk -v n="${num}" 'BEGIN { printf "%.6f", n * 3600 }' ;;
+    esac
+    return 0
+  fi
+
+  echo "ERROR: Invalid duration '${value}'. Use a number or suffix s/m/h (e.g. 30, 30s, 1m)." >&2
+  exit 1
+}
+
+compute_spawn_rate_from_time() {
+  local users="$1"
+  local spawn_time_sec="$2"
+
+  awk -v u="${users}" -v t="${spawn_time_sec}" 'BEGIN {
+    if (t <= 0) {
+      print "ERROR"
+      exit 0
+    }
+    r = u / t
+    if (r <= 0) r = 0.0001
+    printf "%.6f", r
+  }'
 }
 
 run_locust() {
   local users="$1"
   local label="$2"
   local out_csv="$3"
-  local effective_spawn_rate="${SPAWN_RATE:-${users}}"
+
+  local spawn_time_sec=""
+  spawn_time_sec=$(parse_duration_seconds "${SPAWN_TIME:-}")
+
+  local effective_spawn_rate
+  if [[ -n "${spawn_time_sec}" ]]; then
+    effective_spawn_rate=$(compute_spawn_rate_from_time "${users}" "${spawn_time_sec}")
+    if [[ "${effective_spawn_rate}" == "ERROR" ]]; then
+      echo "ERROR: SPAWN_TIME must be greater than 0." >&2
+      exit 1
+    fi
+  else
+    # Default behavior: reach target users in about 1 second.
+    effective_spawn_rate="${users}"
+  fi
+
+  # Wait at least 60s; extend based on estimated ramp-up duration.
+  local ramp_time_sec
+  ramp_time_sec=$(awk -v u="${users}" -v r="${effective_spawn_rate}" 'BEGIN { if (r <= 0) print 0; else printf "%.6f", u / r }')
+  local swarm_wait_sec
+  swarm_wait_sec=$(awk -v ramp="${ramp_time_sec}" 'BEGIN {
+    t = int(ramp + 0.999999) + 30
+    if (t < 60) t = 60
+    print t
+  }')
 
   log "Triggering in-cluster Locust run (users=${users}, spawn_rate=${effective_spawn_rate}, label=${label})..."
 
@@ -274,7 +347,7 @@ run_locust() {
     || { echo "ERROR: Failed to start Locust swarm (POST /swarm)." >&2; exit 1; }
 
   # Poll until ramp-up is complete before starting the timer
-  wait_for_swarm_running
+  wait_for_swarm_running "${swarm_wait_sec}"
 
   local duration_sec="${LOCUST_RUN_TIME%s}"
   info "Sleeping for ${duration_sec}s while cluster-Locust runs..."
@@ -407,7 +480,8 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     info "extra_args:        ${extra_args}"
     info "concurrency:       ${users_list}"
     info "run_time:          ${LOCUST_RUN_TIME}"
-    info "spawn_rate:        ${SPAWN_RATE:-(= user_count)}"
+    info "spawn_time:        ${SPAWN_TIME:-(1s default via user_count)}"
+    info "spawn_rate:        computed per user_count (users / spawn_time)"
     info "cooldown_sec:      ${COOLDOWN_SEC}"
   done
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
