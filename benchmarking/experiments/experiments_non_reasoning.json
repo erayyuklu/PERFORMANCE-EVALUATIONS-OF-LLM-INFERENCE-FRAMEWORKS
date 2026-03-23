@@ -1,0 +1,26 @@
+[
+  {
+    "name": "non_reasoning_baseline",
+    "description": "Qwen2.5-7B-Instruct baseline without quantization.",
+    "vllm_extra_args": "--model Qwen/Qwen2.5-7B-Instruct --reasoning-parser none",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Non-reasoning model comparison: no chain-of-thought overhead"
+  },
+  {
+    "name": "non_reasoning_fp8",
+    "description": "Qwen2.5-7B-Instruct with FP8 quantization.",
+    "vllm_extra_args": "--model Qwen/Qwen2.5-7B-Instruct --reasoning-parser none --quantization fp8",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Non-reasoning + quantization: compare quality loss vs reasoning model"
+  },
+  {
+    "name": "non_reasoning_bitsandbytes",
+    "description": "Qwen2.5-7B-Instruct with BitsAndBytes quantization.",
+    "vllm_extra_args": "--model Qwen/Qwen2.5-7B-Instruct --reasoning-parser none --quantization bitsandbytes",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Non-reasoning + BnB: compare quality loss vs reasoning model"
+  }
+]

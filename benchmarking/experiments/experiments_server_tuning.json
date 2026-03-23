@@ -1,0 +1,51 @@
+[
+  {
+    "name": "chunked_prefill",
+    "description": "Enable chunked prefill to reduce head-of-line blocking for long prompts.",
+    "vllm_extra_args": "--enable-chunked-prefill",
+    "concurrency": [16, 32, 64],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "max_num_seqs_8",
+    "description": "Limit max concurrent sequences to 8.",
+    "vllm_extra_args": "--max-num-seqs 8",
+    "concurrency": [8, 16, 32],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "max_num_seqs_32",
+    "description": "Increase max concurrent sequences to 32.",
+    "vllm_extra_args": "--max-num-seqs 32",
+    "concurrency": [16, 32, 64],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "max_num_seqs_128",
+    "description": "Push max concurrent sequences to 128 for throughput.",
+    "vllm_extra_args": "--max-num-seqs 128",
+    "concurrency": [32, 64, 128],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "gpu_mem_085",
+    "description": "Reduce GPU memory utilization to 0.85 (more headroom, fewer sequences).",
+    "vllm_extra_args": "--gpu-memory-utilization 0.85",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "gpu_mem_090",
+    "description": "GPU memory utilization at 0.90.",
+    "vllm_extra_args": "--gpu-memory-utilization 0.90",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"]
+  },
+  {
+    "name": "chunked_prefill_max_seqs_32",
+    "description": "Chunked prefill combined with max-num-seqs 32.",
+    "vllm_extra_args": "--enable-chunked-prefill --max-num-seqs 32",
+    "concurrency": [16, 32, 64],
+    "prompt_categories": ["all"]
+  }
+]

@@ -90,6 +90,11 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: VLLM_PROMPT_LEN
+            - name: VLLM_USER_PROFILE
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_USER_PROFILE
             - name: LOCUST_ARTIFACTS_DIR
               valueFrom:
                 configMapKeyRef:

@@ -1,0 +1,50 @@
+[
+  {
+    "name": "custom_all_profiles",
+    "description": "Baseline with custom dataset across all user profiles.",
+    "vllm_extra_args": "",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=all in locust-config ConfigMap"
+  },
+  {
+    "name": "custom_coding_only",
+    "description": "Custom dataset filtered to coding prompts only.",
+    "vllm_extra_args": "",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=coding"
+  },
+  {
+    "name": "custom_creative_only",
+    "description": "Custom dataset filtered to creative prompts (includes short-input-long-output).",
+    "vllm_extra_args": "",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=creative"
+  },
+  {
+    "name": "custom_reasoning_only",
+    "description": "Custom dataset filtered to reasoning/math prompts.",
+    "vllm_extra_args": "",
+    "concurrency": [16, 64],
+    "prompt_categories": ["all"],
+    "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=reasoning"
+  },
+  {
+    "name": "custom_short_input_only",
+    "description": "Short prompts across all profiles — tests TTFT and prefill behavior.",
+    "vllm_extra_args": "",
+    "concurrency": [16, 64],
+    "prompt_categories": ["short"],
+    "notes": "Set DATASET_TYPE=custom, VLLM_PROMPT_LEN=short"
+  },
+  {
+    "name": "custom_long_input_only",
+    "description": "Long prompts across all profiles — tests KV cache pressure and decode behavior.",
+    "vllm_extra_args": "",
+    "concurrency": [16, 64],
+    "prompt_categories": ["long"],
+    "notes": "Set DATASET_TYPE=custom, VLLM_PROMPT_LEN=long"
+  }
+]
