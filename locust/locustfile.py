@@ -29,6 +29,8 @@ Environment variables:
                                                          For ShareGPT: derived from total conversation character length
                                                              short < 200 chars | medium < 1000 chars | long ≥ 1000 chars
                              For custom: matched against the 'category' field in the record
+    VLLM_USER_PROFILE      — filter by user profile: coding | creative | reasoning | general | all (default: all)
+                               Only applies to custom datasets with a 'user_profile' field
     LOCUST_PROMETHEUS_PORT — port for the Prometheus /metrics endpoint (default: 9646)
     LOCUST_ARTIFACTS_DIR   — directory for worker artifact files (default: /tmp)
 """
@@ -89,6 +91,7 @@ _DEFAULT_CUSTOM = Path(__file__).parent / "prompts" / "dataset.json"
 CUSTOM_DATASET_PATH = Path(os.getenv("CUSTOM_DATASET_PATH", _DEFAULT_CUSTOM))
 
 PROMPT_LEN      = os.getenv("VLLM_PROMPT_LEN", "all")  # short | medium | long | all
+USER_PROFILE    = os.getenv("VLLM_USER_PROFILE", "all").lower()  # coding | creative | reasoning | general | all
 PROMETHEUS_PORT = int(os.getenv("LOCUST_PROMETHEUS_PORT", "9646"))
 ARTIFACTS_DIR   = Path(os.getenv("LOCUST_ARTIFACTS_DIR", "/tmp"))
 
@@ -282,9 +285,13 @@ def _load_custom() -> list[dict]:
     if PROMPT_LEN != "all":
         records = [r for r in records if r.get("category") == PROMPT_LEN]
 
+    if USER_PROFILE != "all":
+        records = [r for r in records if r.get("user_profile") == USER_PROFILE]
+
     if not records:
         raise ValueError(
-            f"No prompts found for category={PROMPT_LEN!r} in {CUSTOM_DATASET_PATH}"
+            f"No prompts found for category={PROMPT_LEN!r}, "
+            f"user_profile={USER_PROFILE!r} in {CUSTOM_DATASET_PATH}"
         )
 
     prompts: list[dict] = []
@@ -298,12 +305,13 @@ def _load_custom() -> list[dict]:
         prompts.append({
             "messages":     messages,
             "category":     r.get("category", "unknown"),
+            "user_profile": r.get("user_profile", "unknown"),
             "approx_chars": len(prompt_text),
         })
 
     logger.info(
         f"[benchmarking] Loaded {len(prompts)} custom prompts "
-        f"(filter: {PROMPT_LEN}) from {CUSTOM_DATASET_PATH}"
+        f"(category: {PROMPT_LEN}, user_profile: {USER_PROFILE}) from {CUSTOM_DATASET_PATH}"
     )
     return prompts
 
