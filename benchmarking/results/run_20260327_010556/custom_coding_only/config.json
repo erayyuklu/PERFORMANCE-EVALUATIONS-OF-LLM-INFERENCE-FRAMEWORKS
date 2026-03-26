@@ -1,0 +1,19 @@
+{
+  "name": "custom_coding_only",
+  "description": "Custom dataset filtered to coding prompts only.",
+  "vllm_extra_args": "",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "configmap_overrides": {
+    "DATASET_TYPE": "custom",
+    "VLLM_USER_PROFILE": "coding",
+    "VLLM_PROMPT_LEN": "all",
+    "VLLM_MAX_TOKENS": "2048"
+  },
+  "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=coding"
+}

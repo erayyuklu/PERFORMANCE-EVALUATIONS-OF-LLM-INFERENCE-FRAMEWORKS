@@ -34,7 +34,7 @@ spec:
 
       containers:
         - name: locust-worker
-          image: europe-west3-docker.pkg.dev/PROJECT_ID/locust/locust-vllm:latest
+          image: europe-west3-docker.pkg.dev/cmpe492gcp3/locust/locust-vllm:latest
           imagePullPolicy: Always
           args:
             - "--worker"
@@ -100,10 +100,6 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: LOCUST_ARTIFACTS_DIR
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "256Mi"
       volumes:
         - name: worker-artifacts
           emptyDir: {}

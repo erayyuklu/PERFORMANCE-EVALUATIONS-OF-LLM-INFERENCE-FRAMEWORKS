@@ -125,9 +125,11 @@ cleanup() {
 trap cleanup EXIT
 
 wait_for_deployment() {
-  log "Waiting for deployment '${DEPLOYMENT_NAME}' to be ready..."
-  kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
-    -n "${NAMESPACE}" \
+  local dep_name="$1"
+  local ns="$2"
+  log "Waiting for deployment '${dep_name}' to be ready..."
+  kubectl rollout status deployment/"${dep_name}" \
+    -n "${ns}" \
     --timeout=1200s
   log "Deployment is ready."
 }
@@ -171,7 +173,83 @@ patch_vllm_args() {
 
   kubectl rollout restart deployment/"${DEPLOYMENT_NAME}" -n "${NAMESPACE}"
   sleep 3
-  wait_for_deployment
+  wait_for_deployment "${DEPLOYMENT_NAME}" "${NAMESPACE}"
+}
+
+wait_for_locust_workers() {
+  local max_attempts="${1:-120}"
+  local attempt
+
+  for attempt in $(seq 1 "${max_attempts}"); do
+    local worker_count
+    worker_count=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
+      | jq -r '.worker_count // 0' 2>/dev/null || echo "0")
+    if [[ "${worker_count}" =~ ^[0-9]+$ ]] && [[ "${worker_count}" -ge 1 ]]; then
+      info "Locust workers connected: ${worker_count}."
+      return 0
+    fi
+    info "Waiting for Locust workers to register on master (attempt ${attempt}/${max_attempts})..."
+    sleep 2
+  done
+
+  echo "ERROR: No Locust workers connected to master after wait period." >&2
+  exit 1
+}
+
+patch_locust_configmap() {
+  local overrides_json="$1"
+
+  # Apply configmap overrides
+  local has_overrides
+  has_overrides=$(echo "${overrides_json}" | jq 'if type=="object" then length else 0 end')
+  
+  if [[ "${has_overrides}" -gt 0 ]]; then
+    log "Patching locust-config ConfigMap with overrides..."
+    
+    local patch_str="{\"data\":{"
+    while IFS="=" read -r key val; do
+      info "  ${key}=${val}"
+      patch_str+="\"${key}\":\"${val}\","
+    done < <(echo "${overrides_json}" | jq -r 'to_entries[] | "\(.key)=\(.value)"')
+    patch_str="${patch_str%,}}}"
+    
+    kubectl patch configmap locust-config -n "${LOCUST_NAMESPACE}" -p "${patch_str}"
+
+    info "ConfigMap patched. Restarting Locust deployments sequentially..."
+    
+    # 1. Restart Master and wait for it to be fully rolled out
+    kubectl rollout restart deployment/locust-master -n "${LOCUST_NAMESPACE}"
+    wait_for_deployment "locust-master" "${LOCUST_NAMESPACE}"
+    
+    # Wait extra to ensure old master endpoints are completely un-registered K8s-side
+    sleep 10
+    
+    # 2. Restart Workers
+    kubectl rollout restart deployment/locust-worker -n "${LOCUST_NAMESPACE}"
+    wait_for_deployment "locust-worker" "${LOCUST_NAMESPACE}"
+  fi
+  info "Locust deployments are ready."
+
+  # Re-establish port-forward to Locust master (old one is dead after restart)
+  if [[ -n "${PORT_FORWARD_PID}" ]]; then
+    kill "${PORT_FORWARD_PID}" 2>/dev/null || true
+  fi
+  kubectl port-forward svc/locust-master 8089:8089 -n "${LOCUST_NAMESPACE}" &>/dev/null &
+  PORT_FORWARD_PID=$!
+  info "New Locust port-forward PID: ${PORT_FORWARD_PID}"
+
+  # Wait for port-forward to be reachable
+  local attempt
+  for attempt in $(seq 1 15); do
+    if curl -sf "${LOCUST_MASTER_URL}/" &>/dev/null; then
+      info "Locust master is reachable."
+      break
+    fi
+    sleep 2
+  done
+
+  # Ensure workers are connected
+  wait_for_locust_workers 60
 }
 
 print_grafana_link() {
@@ -197,7 +275,7 @@ print_grafana_link() {
   local total_sec=$(( total_runs * (duration_sec + COOLDOWN_SEC) + rollout_count * ROLLOUT_SEC + 120 ))
 
   local from_ms to_ms
-  from_ms=$(date +%s%3N)                              # epoch milliseconds (GNU date / Linux)
+  from_ms=$(python3 -c 'import time; print(int(time.time() * 1000))')
   to_ms=$(( from_ms + total_sec * 1000 ))
 
   # Resolve Grafana external IP
@@ -576,6 +654,12 @@ for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   else
     # Patch per experiment so overrides are deterministic.
     patch_vllm_args "${exp_model}" "${extra_args}"
+  fi
+
+  # Patch locust-config ConfigMap if experiment has configmap_overrides
+  cm_overrides=$(echo "${exp}" | jq -r '.configmap_overrides // empty')
+  if [[ -n "${cm_overrides}" ]]; then
+    patch_locust_configmap "${cm_overrides}"
   fi
 
   for users in ${users_list}; do

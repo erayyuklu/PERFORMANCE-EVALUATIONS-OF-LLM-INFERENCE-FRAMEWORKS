@@ -386,9 +386,14 @@ class VllmUser(HttpUser):
         messages = entry["messages"]
         category = entry["category"]
 
+        if DATASET_TYPE == "sharegpt":
+            prompt_messages = messages[:-1]  # remove final assistant turn to prompt the model
+        else:
+            prompt_messages = messages       # custom dataset only contains user/system turns
+
         payload = {
             "model":       MODEL_NAME,
-            "messages":    messages[:-1],  # all but the last message for the prompt, to avoid leaking the final gpt response in the prompt
+            "messages":    prompt_messages,
             "stream":      True,
             "temperature": TEMPERATURE,
         }

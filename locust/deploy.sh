@@ -26,7 +26,7 @@ echo "==========================================================================
 
 # 2. Build Docker image
 echo "==> Building Locust Docker image..."
-docker build -t "${IMAGE_TAG}" "${SCRIPT_DIR}/"
+docker build --platform=linux/amd64 -t "${IMAGE_TAG}" "${SCRIPT_DIR}/"
 
 # 3. Push to Artifact Registry
 echo "==> Pushing image to Artifact Registry..."

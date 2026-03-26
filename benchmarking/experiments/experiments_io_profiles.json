@@ -5,6 +5,12 @@
     "vllm_extra_args": "",
     "concurrency": [16, 64],
     "prompt_categories": ["all"],
+    "configmap_overrides": {
+      "DATASET_TYPE": "custom",
+      "VLLM_USER_PROFILE": "all",
+      "VLLM_PROMPT_LEN": "all",
+      "VLLM_MAX_TOKENS": "2048"
+    },
     "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=all in locust-config ConfigMap"
   },
   {
@@ -13,6 +19,12 @@
     "vllm_extra_args": "",
     "concurrency": [16, 64],
     "prompt_categories": ["all"],
+    "configmap_overrides": {
+      "DATASET_TYPE": "custom",
+      "VLLM_USER_PROFILE": "coding",
+      "VLLM_PROMPT_LEN": "all",
+      "VLLM_MAX_TOKENS": "2048"
+    },
     "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=coding"
   },
   {
@@ -21,6 +33,12 @@
     "vllm_extra_args": "",
     "concurrency": [16, 64],
     "prompt_categories": ["all"],
+    "configmap_overrides": {
+      "DATASET_TYPE": "custom",
+      "VLLM_USER_PROFILE": "creative",
+      "VLLM_PROMPT_LEN": "all",
+      "VLLM_MAX_TOKENS": "2048"
+    },
     "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=creative"
   },
   {
@@ -29,6 +47,12 @@
     "vllm_extra_args": "",
     "concurrency": [16, 64],
     "prompt_categories": ["all"],
+    "configmap_overrides": {
+      "DATASET_TYPE": "custom",
+      "VLLM_USER_PROFILE": "reasoning",
+      "VLLM_PROMPT_LEN": "all",
+      "VLLM_MAX_TOKENS": "2048"
+    },
     "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=reasoning"
   },
   {
@@ -37,6 +61,12 @@
     "vllm_extra_args": "",
     "concurrency": [16, 64],
     "prompt_categories": ["short"],
+    "configmap_overrides": {
+      "DATASET_TYPE": "custom",
+      "VLLM_USER_PROFILE": "all",
+      "VLLM_PROMPT_LEN": "short",
+      "VLLM_MAX_TOKENS": "2048"
+    },
     "notes": "Set DATASET_TYPE=custom, VLLM_PROMPT_LEN=short"
   },
   {
@@ -45,6 +75,12 @@
     "vllm_extra_args": "",
     "concurrency": [16, 64],
     "prompt_categories": ["long"],
+    "configmap_overrides": {
+      "DATASET_TYPE": "custom",
+      "VLLM_USER_PROFILE": "all",
+      "VLLM_PROMPT_LEN": "long",
+      "VLLM_MAX_TOKENS": "2048"
+    },
     "notes": "Set DATASET_TYPE=custom, VLLM_PROMPT_LEN=long"
   }
 ]

@@ -1,0 +1,19 @@
+{
+  "name": "custom_all_profiles",
+  "description": "Baseline with custom dataset across all user profiles.",
+  "vllm_extra_args": "",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "configmap_overrides": {
+    "DATASET_TYPE": "custom",
+    "VLLM_USER_PROFILE": "all",
+    "VLLM_PROMPT_LEN": "all",
+    "VLLM_MAX_TOKENS": "2048"
+  },
+  "notes": "Set DATASET_TYPE=custom, VLLM_USER_PROFILE=all in locust-config ConfigMap"
+}

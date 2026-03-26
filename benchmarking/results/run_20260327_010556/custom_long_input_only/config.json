@@ -1,0 +1,19 @@
+{
+  "name": "custom_long_input_only",
+  "description": "Long prompts across all profiles — tests KV cache pressure and decode behavior.",
+  "vllm_extra_args": "",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "long"
+  ],
+  "configmap_overrides": {
+    "DATASET_TYPE": "custom",
+    "VLLM_USER_PROFILE": "all",
+    "VLLM_PROMPT_LEN": "long",
+    "VLLM_MAX_TOKENS": "2048"
+  },
+  "notes": "Set DATASET_TYPE=custom, VLLM_PROMPT_LEN=long"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "custom_short_input_only",
+  "description": "Short prompts across all profiles — tests TTFT and prefill behavior.",
+  "vllm_extra_args": "",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "short"
+  ],
+  "configmap_overrides": {
+    "DATASET_TYPE": "custom",
+    "VLLM_USER_PROFILE": "all",
+    "VLLM_PROMPT_LEN": "short",
+    "VLLM_MAX_TOKENS": "2048"
+  },
+  "notes": "Set DATASET_TYPE=custom, VLLM_PROMPT_LEN=short"
+}
