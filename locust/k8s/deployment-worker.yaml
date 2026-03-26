@@ -102,8 +102,8 @@ spec:
                   key: LOCUST_ARTIFACTS_DIR
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "250m"
+              memory: "256Mi"
       volumes:
         - name: worker-artifacts
           emptyDir: {}

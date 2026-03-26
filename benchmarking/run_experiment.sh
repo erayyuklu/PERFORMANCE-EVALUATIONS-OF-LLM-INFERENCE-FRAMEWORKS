@@ -6,6 +6,7 @@
 #   ./run_experiment.sh [--experiment-file experiments.json]
 #                       [--experiment <name>] [--run-time <duration>]
 #                       [--spawn-time <duration>]
+#                       [--skip-patch]
 #                       [--dry-run]
 #
 # What this script does for each experiment configuration:
@@ -34,6 +35,7 @@ DEPLOYMENT_NAME="vllm-server"
 PORT_FORWARD_PID=""
 PROM_PORT_FORWARD_PID=""
 DRY_RUN=false
+SKIP_PATCH=false                              # run tests without patching vLLM args
 # Estimated time for a vLLM deployment rollout (seconds). Default: 15 minutes
 ROLLOUT_SEC="${ROLLOUT_SEC:-900}"
 # Maximum time to wait for Locust to drain in-flight requests after /stop.
@@ -50,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --experiment)      EXPERIMENT_NAME="$2";   shift 2 ;;
     --run-time)        LOCUST_RUN_TIME="$2";   shift 2 ;;
     --spawn-time)      SPAWN_TIME="$2";        shift 2 ;;
+    --skip-patch)      SKIP_PATCH=true;         shift   ;;
     --dry-run)         DRY_RUN=true;           shift   ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
@@ -130,23 +133,36 @@ wait_for_deployment() {
 }
 
 patch_vllm_args() {
-  local extra_args="$1"
-  log "Patching vLLM deployment with args: ${extra_args}"
+  local model_override="$1"
+  local extra_args="$2"
 
-  # Base args mirroring deployment.yaml (each flag and value as separate elements)
-  local base_args='["--model","$(MODEL)","--reasoning-parser","$(REASONING_PARSER)","--max-model-len","$(MAX_MODEL_LEN)","--gpu-memory-utilization","$(GPU_MEMORY_UTILIZATION)","--dtype","$(DTYPE)","--tensor-parallel-size","$(TENSOR_PARALLEL_SIZE)","--port","$(PORT)"]'
+  # Default behavior is to use YAML config, unless experiment args already
+  # specify a config file.
+  local use_default_config=true
+  if [[ " ${extra_args} " =~ [[:space:]]--config[[:space:]] ]]; then
+    use_default_config=false
+  fi
 
-  # Split extra_args into individual tokens and build a JSON array
-  local extra_json="[]"
+  local args_array=()
+  if [[ "${use_default_config}" == "true" ]]; then
+    args_array=("--config" "/etc/vllm/vllm_config.yaml")
+  fi
+
+  # Model must be positional for `vllm serve`.
+  if [[ -n "${model_override}" ]]; then
+    args_array=("${model_override}" "${args_array[@]}")
+  fi
+
   if [[ -n "${extra_args}" ]]; then
     local extra_array=()
     read -ra extra_array <<< "${extra_args}"
-    extra_json=$(printf '%s\n' "${extra_array[@]}" | jq -R . | jq -s .)
+    args_array+=("${extra_array[@]}")
   fi
 
-  # Merge base + extra args and patch the container args directly
+  log "Patching vLLM deployment with args: ${args_array[*]}"
+
   local merged_args
-  merged_args=$(jq -n --argjson base "${base_args}" --argjson extra "${extra_json}" '$base + $extra')
+  merged_args=$(printf '%s\n' "${args_array[@]}" | jq -R . | jq -s .)
 
   kubectl patch deployment/"${DEPLOYMENT_NAME}" \
     -n "${NAMESPACE}" \
@@ -165,12 +181,13 @@ print_grafana_link() {
   local total_runs=0
   local rollout_count=0
   for idx in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
-    local e n_users n_cats extra_args
+    local e n_users n_cats extra_args exp_model
     e=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}]")
     n_users=$(echo "${e}" | jq '.concurrency | length')
     n_cats=$(echo "${e}" | jq '.prompt_categories | length')
+    exp_model=$(echo "${e}" | jq -r '.model // ""')
     extra_args=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}].vllm_extra_args // \"\"")
-    if [[ -n "${extra_args}" ]]; then
+    if [[ -n "${exp_model}" || -n "${extra_args}" ]]; then
       rollout_count=$(( rollout_count + 1 ))
     fi
     total_runs=$(( total_runs + n_users * n_cats ))
@@ -341,13 +358,13 @@ run_locust() {
     effective_spawn_rate="${users}"
   fi
 
-  # Wait at least 60s; extend based on estimated ramp-up duration.
+  # Wait at least 90s; extend based on estimated ramp-up duration.
   local ramp_time_sec
   ramp_time_sec=$(awk -v u="${users}" -v r="${effective_spawn_rate}" 'BEGIN { if (r <= 0) print 0; else printf "%.6f", u / r }')
   local swarm_wait_sec
   swarm_wait_sec=$(awk -v ramp="${ramp_time_sec}" 'BEGIN {
-    t = int(ramp + 0.999999) + 30
-    if (t < 60) t = 60
+    t = int(ramp + 0.999999) + 90
+    if (t < 90) t = 90
     print t
   }')
 
@@ -490,15 +507,30 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
     exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
     exp_name=$(echo "${exp}" | jq -r '.name')
-    extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // "(none)"')
+    exp_model=$(echo "${exp}" | jq -r '.model // ""')
+    extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""')
+
+    if [[ "${extra_args}" =~ (^|[[:space:]])--model[[:space:]]+([^[:space:]]+) ]]; then
+      legacy_model="${BASH_REMATCH[2]}"
+      if [[ -z "${exp_model}" ]]; then
+        exp_model="${legacy_model}"
+      fi
+      extra_args=$(echo "${extra_args}" | sed -E 's/(^|[[:space:]])--model[[:space:]]+[^[:space:]]+//g' | xargs || true)
+    fi
+
+    [[ -z "${extra_args}" ]] && extra_args="(none)"
+    [[ -z "${exp_model}" ]] && exp_model="(default from YAML)"
+
     users_list=$(echo "${exp}" | jq -r '[.concurrency[]] | join(", ")')
     prompt_categories=$(echo "${exp}" | jq -r '[.prompt_categories[]] | join(", ")')
     log "[$((i+1))/${NUM_EXPERIMENTS}] ${exp_name}"
+    info "model:             ${exp_model}"
     info "extra_args:        ${extra_args}"
     info "concurrency:       ${users_list}"
     info "run_time:          ${LOCUST_RUN_TIME}"
     info "spawn_time:        ${SPAWN_TIME:-(1s default via user_count)}"
     info "spawn_rate:        computed per user_count (users / spawn_time)"
+    info "skip_patch:        ${SKIP_PATCH}"
     info "cooldown_sec:      ${COOLDOWN_SEC}"
   done
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -514,7 +546,18 @@ ensure_locust_ready
 for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
   exp_name=$(echo "${exp}" | jq -r '.name')
+  exp_model=$(echo "${exp}" | jq -r '.model // ""')
   extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""')
+
+  # Backward-compat: convert legacy --model flag in extra args to positional model.
+  if [[ "${extra_args}" =~ (^|[[:space:]])--model[[:space:]]+([^[:space:]]+) ]]; then
+    legacy_model="${BASH_REMATCH[2]}"
+    if [[ -z "${exp_model}" ]]; then
+      exp_model="${legacy_model}"
+    fi
+    extra_args=$(echo "${extra_args}" | sed -E 's/(^|[[:space:]])--model[[:space:]]+[^[:space:]]+//g' | xargs || true)
+  fi
+
   users_list=$(echo "${exp}" | jq -r '.concurrency[]')
 
   log ""
@@ -528,11 +571,11 @@ for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   # Save experiment config
   echo "${exp}" | jq '.' > "${EXP_DIR}/config.json"
 
-  # Patch deployment (skip if no extra args supplied — use current deployment)
-  if [[ -n "${extra_args}" ]]; then
-    patch_vllm_args "${extra_args}"
+  if [[ "${SKIP_PATCH}" == "true" ]]; then
+    log "Skipping vLLM deployment patch for ${exp_name}; using current server args/config."
   else
-    log "No deployment patch. Using current vLLM deployment."
+    # Patch per experiment so overrides are deterministic.
+    patch_vllm_args "${exp_model}" "${extra_args}"
   fi
 
   for users in ${users_list}; do

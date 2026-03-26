@@ -1,0 +1,14 @@
+{
+  "name": "non_reasoning_baseline",
+  "description": "Qwen2.5-7B-Instruct baseline without quantization.",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "vllm_extra_args": "--config /etc/vllm/vllm_config_non_reasoning.yaml",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "Non-reasoning model comparison: no chain-of-thought overhead"
+}

@@ -127,8 +127,8 @@ spec:
                   key: LOCUST_STOP_TIMEOUT
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "250m"
+              memory: "256Mi"
           readinessProbe:
             httpGet:
               path: /

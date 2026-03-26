@@ -25,21 +25,10 @@ spec:
       containers:
         - name: vllm
           image: vllm/vllm-openai:latest
+          command: ["vllm", "serve"]
           args:
-            - "--model"
-            - "$(MODEL)"
-            - "--reasoning-parser"
-            - "$(REASONING_PARSER)"
-            - "--max-model-len"
-            - "$(MAX_MODEL_LEN)"
-            - "--gpu-memory-utilization"
-            - "$(GPU_MEMORY_UTILIZATION)"
-            - "--dtype"
-            - "$(DTYPE)"
-            - "--tensor-parallel-size"
-            - "$(TENSOR_PARALLEL_SIZE)"
-            - "--port"
-            - "$(PORT)"
+            - "--config"
+            - "/etc/vllm/vllm_config.yaml"
           ports:
             - name: http
               containerPort: 8000
@@ -50,41 +39,10 @@ spec:
                 secretKeyRef:
                   name: hf-token-secret
                   key: HF_TOKEN
-            - name: MODEL
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: MODEL
-            - name: REASONING_PARSER
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: REASONING_PARSER
-            - name: MAX_MODEL_LEN
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: MAX_MODEL_LEN
-            - name: GPU_MEMORY_UTILIZATION
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: GPU_MEMORY_UTILIZATION
-            - name: DTYPE
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: DTYPE
-            - name: TENSOR_PARALLEL_SIZE
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: TENSOR_PARALLEL_SIZE
-            - name: PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: vllm-args-config
-                  key: PORT
+          volumeMounts:
+            - name: vllm-config
+              mountPath: /etc/vllm
+              readOnly: true
 
           resources:
             requests:
@@ -119,7 +77,15 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-      volumes: []
+      volumes:
+        - name: vllm-config
+          configMap:
+            name: vllm-server-config
+            items:
+              - key: vllm_config.yaml
+                path: vllm_config.yaml
+              - key: vllm_config_non_reasoning.yaml
+                path: vllm_config_non_reasoning.yaml
       tolerations:
         - key: "nvidia.com/gpu"
           operator: "Exists"

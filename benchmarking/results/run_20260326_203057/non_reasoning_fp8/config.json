@@ -1,0 +1,14 @@
+{
+  "name": "non_reasoning_fp8",
+  "description": "Qwen2.5-7B-Instruct with FP8 quantization.",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "vllm_extra_args": "--config /etc/vllm/vllm_config_non_reasoning.yaml --quantization fp8",
+  "concurrency": [
+    16,
+    64
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "Non-reasoning + quantization: compare quality loss vs reasoning model"
+}
