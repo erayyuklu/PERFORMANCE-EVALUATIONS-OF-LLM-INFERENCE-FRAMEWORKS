@@ -1,4 +1,5 @@
 model: Qwen/Qwen2.5-7B-Instruct
+quantization: fp8
 max-model-len: -1
 gpu-memory-utilization: 0.90
 dtype: half
