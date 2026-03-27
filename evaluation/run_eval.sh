@@ -10,8 +10,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/config.env"
-source "${SCRIPT_DIR}/../vllm/secrets.env"
+# Strip Windows carriage-returns (\r) to avoid invisible trailing characters
+source <(tr -d '\r' < "${SCRIPT_DIR}/config.env")
+source <(tr -d '\r' < "${SCRIPT_DIR}/../vllm/secrets.env")
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,9 +116,9 @@ log "  Few-shot   : ${NUM_FEWSHOT}"
 log "  Batch size : ${BATCH_SIZE}"
 log "  Max tokens : ${MAX_GEN_TOKS}"
 log "  Thinking   : ${ENABLE_THINKING}"
-LIMIT_ARG=""
+LIMIT_ARGS=()
 if [[ -n "${LIMIT:-}" ]]; then
-    LIMIT_ARG="--limit ${LIMIT}"
+    LIMIT_ARGS=(--limit "${LIMIT}")
     log "  Limit      : ${LIMIT}"
 fi
 log ""
@@ -132,16 +133,15 @@ if [[ -n "${HF_TOKEN:-}" ]]; then
 fi
 
 OPENAI_API_KEY="EMPTY" \
-python -m lm_eval --model local-chat-completions \
-  --model_args "model=${MODEL_NAME},base_url=${VLLM_BASE_URL}/v1/chat/completions,num_concurrent=${NUM_CONCURRENT},tokenized_requests=False" \
+python -m lm_eval --model local-completions \
+  --model_args "model=${MODEL_NAME},base_url=${VLLM_BASE_URL}/v1/completions,num_concurrent=${NUM_CONCURRENT},tokenized_requests=False,timeout=${TIMEOUT}" \
   "${GEN_KWARGS_ARGS[@]}" \
   --tasks "${TASKS}" \
   --num_fewshot "${NUM_FEWSHOT}" \
   --batch_size "${BATCH_SIZE}" \
   --output_path "${RUN_DIR}" \
-  ${LIMIT_ARG} \
-  --log_samples \
-  --apply_chat_template
+  "${LIMIT_ARGS[@]}" \
+  --log_samples
 
 EXIT_CODE=$?
 
