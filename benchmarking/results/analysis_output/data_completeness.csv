@@ -1,0 +1,25 @@
+run,experiment,users,custom_metrics,prometheus,stats
+Quant Reasoning,baseline,16,❌,❌,✅
+Quant Reasoning,baseline,64,✅,✅,✅
+Quant Reasoning,bitsandbytes_quantization,16,❌,❌,✅
+Quant Reasoning,bitsandbytes_quantization,64,❌,❌,❌
+Quant Reasoning,fp8_quantization,16,❌,❌,✅
+Quant Reasoning,fp8_quantization,64,✅,✅,✅
+Quant Non-Reasoning,non_reasoning_baseline,16,❌,❌,✅
+Quant Non-Reasoning,non_reasoning_baseline,64,✅,✅,✅
+Quant Non-Reasoning,non_reasoning_bitsandbytes,16,❌,❌,❌
+Quant Non-Reasoning,non_reasoning_bitsandbytes,64,❌,❌,❌
+Quant Non-Reasoning,non_reasoning_fp8,16,❌,❌,✅
+Quant Non-Reasoning,non_reasoning_fp8,64,❌,✅,✅
+I/O Profiles,custom_all_profiles,16,✅,✅,✅
+I/O Profiles,custom_all_profiles,64,✅,✅,✅
+I/O Profiles,custom_coding_only,16,✅,✅,✅
+I/O Profiles,custom_coding_only,64,✅,✅,✅
+I/O Profiles,custom_creative_only,16,✅,✅,✅
+I/O Profiles,custom_creative_only,64,✅,✅,✅
+I/O Profiles,custom_long_input_only,16,✅,✅,✅
+I/O Profiles,custom_long_input_only,64,✅,✅,✅
+I/O Profiles,custom_reasoning_only,16,✅,✅,✅
+I/O Profiles,custom_reasoning_only,64,✅,✅,✅
+I/O Profiles,custom_short_input_only,16,✅,✅,✅
+I/O Profiles,custom_short_input_only,64,✅,✅,✅

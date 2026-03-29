@@ -1,0 +1,17 @@
+model,quantization,benchmark,score,metric,quant_label
+DeepSeek-R1,bitsandbytes,arc_challenge,0.516,acc_norm,BitsAndBytes
+DeepSeek-R1,bitsandbytes,mmlu,0.5929824561403508,acc,BitsAndBytes
+DeepSeek-R1,fp8,arc_challenge,0.518,acc_norm,FP8
+DeepSeek-R1,fp8,gsm8k,0.785,exact_match (strict),FP8
+DeepSeek-R1,fp8,mmlu,0.5789473684210527,acc,FP8
+DeepSeek-R1,noquantization,arc_challenge,0.526,acc_norm,No Quant (FP16)
+DeepSeek-R1,noquantization,gsm8k,0.8,exact_match (strict),No Quant (FP16)
+DeepSeek-R1,noquantization,mmlu,0.5929824561403508,acc,No Quant (FP16)
+Qwen2.5,bitsandbytes,arc_challenge,0.644,acc_norm,BitsAndBytes
+Qwen2.5,bitsandbytes,gsm8k,0.861,exact_match (strict),BitsAndBytes
+Qwen2.5,fp8,arc_challenge,0.67,acc_norm,FP8
+Qwen2.5,fp8,gsm8k,0.879,exact_match (strict),FP8
+Qwen2.5,fp8,mmlu,0.7789473684210526,acc,FP8
+Qwen2.5,noquantization,arc_challenge,0.662,acc_norm,No Quant (FP16)
+Qwen2.5,noquantization,gsm8k,0.881,exact_match (strict),No Quant (FP16)
+Qwen2.5,noquantization,mmlu,0.7824561403508772,acc,No Quant (FP16)

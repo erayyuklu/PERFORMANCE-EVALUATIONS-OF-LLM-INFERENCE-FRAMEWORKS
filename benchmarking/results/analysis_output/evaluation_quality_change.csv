@@ -1,0 +1,11 @@
+model,quantization,benchmark,baseline_score,quant_score,change_pct,label
+DeepSeek-R1,FP8,arc_challenge,0.526,0.518,-1.5209125475285183,DeepSeek-R1 / FP8
+DeepSeek-R1,BitsAndBytes,arc_challenge,0.526,0.516,-1.901140684410648,DeepSeek-R1 / BitsAndBytes
+DeepSeek-R1,FP8,mmlu,0.5929824561403508,0.5789473684210527,-2.366863905325433,DeepSeek-R1 / FP8
+DeepSeek-R1,BitsAndBytes,mmlu,0.5929824561403508,0.5929824561403508,0.0,DeepSeek-R1 / BitsAndBytes
+DeepSeek-R1,FP8,gsm8k,0.8,0.785,-1.8750000000000018,DeepSeek-R1 / FP8
+Qwen2.5,FP8,arc_challenge,0.662,0.67,1.2084592145015116,Qwen2.5 / FP8
+Qwen2.5,BitsAndBytes,arc_challenge,0.662,0.644,-2.719033232628401,Qwen2.5 / BitsAndBytes
+Qwen2.5,FP8,mmlu,0.7824561403508772,0.7789473684210526,-0.448430493273544,Qwen2.5 / FP8
+Qwen2.5,FP8,gsm8k,0.881,0.879,-0.22701475595913756,Qwen2.5 / FP8
+Qwen2.5,BitsAndBytes,gsm8k,0.881,0.861,-2.2701475595913756,Qwen2.5 / BitsAndBytes
