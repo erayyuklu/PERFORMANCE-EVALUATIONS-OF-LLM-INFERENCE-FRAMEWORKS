@@ -208,6 +208,8 @@ patch_locust_configmap() {
     
     local patch_str="{\"data\":{"
     while IFS="=" read -r key val; do
+      val="${val%$'\r'}"
+      key="${key%$'\r'}"
       info "  ${key}=${val}"
       patch_str+="\"${key}\":\"${val}\","
     done < <(echo "${overrides_json}" | jq -r 'to_entries[] | "\(.key)=\(.value)"')
@@ -584,9 +586,9 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
     exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
-    exp_name=$(echo "${exp}" | jq -r '.name')
-    exp_model=$(echo "${exp}" | jq -r '.model // ""')
-    extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""')
+    exp_name=$(echo "${exp}" | jq -r '.name' | tr -d '\r')
+    exp_model=$(echo "${exp}" | jq -r '.model // ""' | tr -d '\r')
+    extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""' | tr -d '\r')
 
     if [[ "${extra_args}" =~ (^|[[:space:]])--model[[:space:]]+([^[:space:]]+) ]]; then
       legacy_model="${BASH_REMATCH[2]}"
@@ -623,9 +625,9 @@ ensure_locust_ready
 
 for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
-  exp_name=$(echo "${exp}" | jq -r '.name')
-  exp_model=$(echo "${exp}" | jq -r '.model // ""')
-  extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""')
+  exp_name=$(echo "${exp}" | jq -r '.name' | tr -d '\r')
+  exp_model=$(echo "${exp}" | jq -r '.model // ""' | tr -d '\r')
+  extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""' | tr -d '\r')
 
   # Backward-compat: convert legacy --model flag in extra args to positional model.
   if [[ "${extra_args}" =~ (^|[[:space:]])--model[[:space:]]+([^[:space:]]+) ]]; then
