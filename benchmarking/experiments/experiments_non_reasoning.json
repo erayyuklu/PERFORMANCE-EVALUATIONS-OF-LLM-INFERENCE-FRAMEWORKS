@@ -1,29 +1,34 @@
 [
   {
     "name": "non_reasoning_baseline",
-    "description": "Qwen2.5-7B-Instruct baseline without quantization.",
-    "model": "Qwen/Qwen2.5-7B-Instruct",
-    "vllm_extra_args": "--config /etc/vllm/vllm_config_non_reasoning.yaml",
-    "concurrency": [16, 64],
-    "prompt_categories": ["all"],
-    "notes": "Non-reasoning model comparison: no chain-of-thought overhead"
+    "description": "Qwen3-7B non-thinking mode baseline without quantization.",
+    "vllm_extra_args": "",
+    "concurrency": [
+      16,
+      64
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "configmap_overrides": {
+      "VLLM_ENABLE_THINKING": "false"
+    },
+    "notes": "Same model, thinking disabled via request parameter"
   },
   {
     "name": "non_reasoning_fp8",
-    "description": "Qwen2.5-7B-Instruct with FP8 quantization.",
-    "model": "Qwen/Qwen2.5-7B-Instruct",
-    "vllm_extra_args": "--config /etc/vllm/vllm_config_non_reasoning.yaml --quantization fp8",
-    "concurrency": [16, 64],
-    "prompt_categories": ["all"],
-    "notes": "Non-reasoning + quantization: compare quality loss vs reasoning model"
-  },
-  {
-    "name": "non_reasoning_bitsandbytes",
-    "description": "Qwen2.5-7B-Instruct with BitsAndBytes quantization.",
-    "model": "Qwen/Qwen2.5-7B-Instruct",
-    "vllm_extra_args": "--config /etc/vllm/vllm_config_non_reasoning.yaml --quantization bitsandbytes",
-    "concurrency": [16, 64],
-    "prompt_categories": ["all"],
-    "notes": "Non-reasoning + BnB: compare quality loss vs reasoning model"
+    "description": "Qwen3-7B non-thinking mode with FP8 quantization.",
+    "vllm_extra_args": "--quantization fp8",
+    "concurrency": [
+      16,
+      64
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "configmap_overrides": {
+      "VLLM_ENABLE_THINKING": "false"
+    },
+    "notes": "Non-reasoning + FP8: same model, thinking disabled"
   }
 ]

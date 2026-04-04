@@ -16,10 +16,13 @@ Dataset:
       custom             — Your own dataset.json with {prompt, category, approx_tokens, …} records.
 
 Environment variables:
-    VLLM_MODEL_NAME        — model identifier sent in the request body (default: see below)
-    VLLM_MAX_TOKENS        — max tokens to generate per request (default: 256)
+    VLLM_MODEL_NAME        — model identifier sent in the request body (default: Qwen/Qwen3-8B)
+    VLLM_MAX_TOKENS        — max tokens to generate per request (default: 2048)
     VLLM_TEMPERATURE       — sampling temperature (default: 0.0 for deterministic outputs)
     VLLM_REQUEST_TIMEOUT   — per-request timeout in seconds (default: 180)
+    VLLM_ENABLE_THINKING   — enable/disable Qwen3 thinking mode: true | false (default: true)
+                               When false, passes enable_thinking=false via chat_template_kwargs
+                               to suppress chain-of-thought reasoning in the response.
     DATASET_TYPE           — which dataset to use: sharegpt | custom  (default: sharegpt)
     SHAREGPT_PATH          — path to the ShareGPT JSON file (default: prompts/sharegpt.json)
     SHAREGPT_URL           — URL to download ShareGPT from if the file is missing
@@ -71,10 +74,11 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MODEL_NAME      = os.getenv("VLLM_MODEL_NAME",   "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+MODEL_NAME      = os.getenv("VLLM_MODEL_NAME",   "Qwen/Qwen3-8B")
 MAX_TOKENS      = int(os.getenv("VLLM_MAX_TOKENS",    "2048"))
 TEMPERATURE     = float(os.getenv("VLLM_TEMPERATURE",  "0.0"))
 REQUEST_TIMEOUT = float(os.getenv("VLLM_REQUEST_TIMEOUT", "180"))
+ENABLE_THINKING = os.getenv("VLLM_ENABLE_THINKING", "true").lower() in ("true", "1", "yes")
 
 DATASET_TYPE    = os.getenv("DATASET_TYPE", "sharegpt").lower()  # sharegpt | custom
 
@@ -399,6 +403,11 @@ class VllmUser(HttpUser):
         }
         if MAX_TOKENS > 0:
             payload["max_tokens"] = MAX_TOKENS
+
+        # Qwen3 thinking mode control: when disabled, pass enable_thinking=false
+        # via chat_template_kwargs so the model skips chain-of-thought reasoning.
+        if not ENABLE_THINKING:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
 
         t_request_sent = time.perf_counter()
         t_first_token  = None

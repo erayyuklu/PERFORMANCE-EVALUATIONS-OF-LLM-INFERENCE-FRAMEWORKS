@@ -48,6 +48,34 @@ if [ -z "${MODEL_NAME}" ]; then
 fi
 echo "Detected model: ${MODEL_NAME}"
 
+# --- Test: Completions (No Thinking) ---
+echo ""
+echo "=== POST /v1/chat/completions (No Thinking) ==="
+start_ts_no_think=$(now_ms)
+CHAT_RESPONSE_NO_THINK=$(curl -s "${BASE_URL}/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"model\": \"Qwen/Qwen3-8B\",
+        \"messages\": [
+            {
+                \"role\": \"user\",
+                \"content\": \"What is the capital of France?\"\
+            }
+        ],
+        \"chat_template_kwargs\": {
+            \"enable_thinking\": false
+        }
+    }")
+end_ts_no_think=$(now_ms)
+
+echo "${CHAT_RESPONSE_NO_THINK}"
+elapsed_ms_no_think=$((end_ts_no_think - start_ts_no_think))
+echo ""
+echo "E2E latency (chat request, no thinking): ${elapsed_ms_no_think} ms"
+echo ""
+
+echo ""
+
 # --- Test: Completions ---
 echo ""
 echo "=== POST /v1/chat/completions ==="
@@ -73,4 +101,3 @@ echo ""
 
 echo ""
 echo "Tests complete."
-

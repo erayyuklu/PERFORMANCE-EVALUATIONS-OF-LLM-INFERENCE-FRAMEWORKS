@@ -6,8 +6,19 @@
 |---|------|-------------|-----------------|-------|
 | 1 | `experiments.json` | 3 | Quantization impact on performance | 1st |
 | 2 | `experiments_io_profiles.json` | 6 | User profile + input/output length effects | 2nd |
-| 3 | `experiments_non_reasoning.json` | 3 | Reasoning vs non-reasoning model comparison | 3rd |
+| 3 | `experiments_non_reasoning.json` | 3 | Thinking vs non-thinking mode comparison | 3rd |
 | 4 | `experiments_server_tuning.json` | 7 | vLLM server parameter optimization | 4th |
+
+---
+
+## Model
+
+All experiments use **Qwen/Qwen3-8B** — a hybrid model that supports both reasoning (thinking) and non-reasoning modes:
+
+- **Thinking mode** (default): The model emits `<think>...</think>` blocks before answering. Controlled by `VLLM_ENABLE_THINKING=true`.
+- **Non-thinking mode**: The model responds directly without chain-of-thought. Controlled by `VLLM_ENABLE_THINKING=false`, which passes `enable_thinking=false` via `chat_template_kwargs` in the API request.
+
+This eliminates the need for separate models or config files for reasoning vs non-reasoning tests.
 
 ---
 
@@ -19,12 +30,12 @@ Quantization compresses model weights to save GPU memory and speed up decoding. 
 ### Experiments
 
 | Experiment | What changes? | vLLM args |
-|------------|--------------|-----------|
+|------------|--------------|-----------| 
 | `baseline` | Nothing — reference point | (default FP16) |
 | `fp8_quantization` | Model weights 16-bit → 8-bit | `--quantization fp8` |
 | `bitsandbytes_quantization` | Model weights 16-bit → 4/8-bit | `--quantization bitsandbytes` |
 
-Each runs at 16 and 64 concurrent users.
+Each runs at 16 and 64 concurrent users. Thinking mode is **enabled** (default).
 
 ### ConfigMap Changes
 None — runs with the default ShareGPT dataset.
@@ -86,40 +97,43 @@ VLLM_PROMPT_LEN=<per experiment: all / short / long>
 
 ---
 
-## 3. `experiments_non_reasoning.json` — Model Comparison
+## 3. `experiments_non_reasoning.json` — Thinking Mode Comparison
 
 ### Why?
-DeepSeek-R1 is a **reasoning model** — it generates a `<think>...</think>` block before every answer. This extra token generation affects performance. **How does a same-size non-reasoning model (Qwen2.5-7B-Instruct) compare?**
+Qwen3-7B-Thinking supports toggling its chain-of-thought reasoning at request time. When thinking is enabled, the model generates a `<think>...</think>` block before every answer — this extra token generation affects performance. **How does the same model perform with thinking disabled?**
+
+### Mechanism
+The `VLLM_ENABLE_THINKING` env var is set to `false` via `configmap_overrides`, which causes the Locust load test to pass `chat_template_kwargs: {"enable_thinking": false}` in each API request. No model reload or config file swap is needed — the vLLM server stays running with the same model.
 
 ### Experiments
 
-| Experiment | Model | Quantization |
-|------------|-------|-------------|
-| `non_reasoning_baseline` | Qwen2.5-7B-Instruct | None (FP16) |
-| `non_reasoning_fp8` | Qwen2.5-7B-Instruct | FP8 |
-| `non_reasoning_bitsandbytes` | Qwen2.5-7B-Instruct | BnB |
+| Experiment | Thinking mode | Quantization |
+|------------|--------------|-------------|
+| `non_reasoning_baseline` | Disabled | None (FP16) |
+| `non_reasoning_fp8` | Disabled | FP8 |
+| `non_reasoning_bitsandbytes` | Disabled | BnB |
 
 ### ConfigMap Changes
-Model is automatically switched via `vllm_extra_args` (`--model Qwen/Qwen2.5-7B-Instruct --reasoning-parser none`).
+```
+VLLM_ENABLE_THINKING=false  (set via configmap_overrides per experiment)
+```
 
 ### Expected Results
 
-| Comparison | Reasoning (DeepSeek-R1) | Non-reasoning (Qwen2.5) |
-|------------|-------------------------|--------------------------|
+| Comparison | Thinking enabled | Thinking disabled |
+|------------|-----------------|-------------------|
 | **TTFT** | Similar | Similar |
 | **TPOT** | ↑ Higher (thinking tokens) | ↓ Lower |
 | **E2E** | ↑ Much longer | ↓ Shorter |
 | **Output token count** | ↑ High (think + answer) | ↓ Low (answer only) |
 | **Quantization sensitivity** | **?** To be measured | **?** To be measured |
-| **lm-eval gsm8k** | ↑ Higher (reasoning advantage) | ↓ Lower |
-| **lm-eval mmlu** | Similar | Similar |
 
-**Hypothesis:** "The non-reasoning model wins on speed metrics but loses on reasoning benchmarks (gsm8k). Whether quantization causes greater quality loss in reasoning models is a key finding of this thesis."
+**Hypothesis:** "Non-thinking mode wins on speed metrics since it doesn't output chain-of-thought tokens. The key finding is whether quantization causes proportionally different quality loss in thinking vs non-thinking mode."
 
 ### Post-experiment
 ```bash
-# Update evaluation config for the Qwen model:
-# MODEL_NAME="Qwen/Qwen2.5-7B-Instruct" and ENABLE_THINKING=false
+# Update evaluation config for non-thinking mode:
+# ENABLE_THINKING=false
 bash evaluation/run_eval.sh
 ```
 
@@ -161,18 +175,18 @@ None — runs with the default ShareGPT dataset. vLLM deployment is automaticall
 ## Execution Summary
 
 ```
-1. experiments.json              ~  4 Locust runs  (2 experiments × 2 concurrency levels)
+1. experiments.json              ~  6 Locust runs  (3 experiments × 2 concurrency levels)
    └── + 3× lm-eval              +  3 quality evaluations
 
 2. experiments_io_profiles.json  ~ 12 Locust runs  (6 experiments × 2 concurrency levels)
    └── Update ConfigMap           DATASET_TYPE=custom, per-experiment profile
 
 3. experiments_non_reasoning.json ~  6 Locust runs  (3 experiments × 2 concurrency levels)
-   └── + 3× lm-eval              +  3 quality evaluations (different model)
+   └── + 3× lm-eval              +  3 quality evaluations (same model, thinking disabled)
 
 4. experiments_server_tuning.json ~ 17 Locust runs  (7 experiments × 2-3 concurrency levels)
 ```
 
-**Total: ~39 Locust runs + ~6 lm-eval evaluations**
+**Total: ~41 Locust runs + ~6 lm-eval evaluations**
 
 Each Locust run takes ~3 minutes (180s) plus cooldown and rollout time. Server tuning experiments require deployment restarts (~15 min rollout each), so that batch may take ~3-4 hours. Other batches take approximately 30-45 minutes each.

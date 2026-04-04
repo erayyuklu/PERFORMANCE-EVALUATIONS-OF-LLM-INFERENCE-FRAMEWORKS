@@ -20,7 +20,7 @@ Edit `config.env` to adjust evaluation parameters:
 
 | Variable          | Default                                                    | Description                     |
 |-------------------|------------------------------------------------------------|---------------------------------|
-| `MODEL_NAME`      | `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B`                 | HuggingFace model ID            |
+| `MODEL_NAME`      | `Qwen/Qwen3-8B`                                   | HuggingFace model ID            |
 | `K8S_NAMESPACE`   | `vllm`                                                     | Kubernetes namespace             |
 | `TASKS`           | `gsm8k,mmlu,hellaswag,arc_challenge,truthfulqa_mc2`        | Comma-separated lm-eval tasks   |
 | `NUM_FEWSHOT`     | `5`                                                        | Number of few-shot examples      |
@@ -52,5 +52,5 @@ Each run creates a timestamped directory under `results/` containing:
 
 ## Notes
 
-- **Chat API**: Uses `local-chat-completions` since DeepSeek-R1 is a chat/instruction-tuned model. This supports `generate_until` tasks but not `loglikelihood`-based scoring.
+- **Chat API**: Uses `local-chat-completions` since Qwen3-7B-Thinking is a chat/instruction-tuned model. This supports `generate_until` tasks but not `loglikelihood`-based scoring.
 - **No API key needed**: `OPENAI_API_KEY` is set to `"EMPTY"` since vLLM doesn't require authentication.

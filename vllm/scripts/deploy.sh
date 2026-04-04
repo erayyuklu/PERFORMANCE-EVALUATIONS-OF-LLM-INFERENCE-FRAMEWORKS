@@ -35,11 +35,9 @@ echo "HF token secret created."
 
 # --- Create vLLM config ConfigMap ---
 VLLM_CONFIG_YAML="${SCRIPT_DIR}/../vllm_config.yaml"
-VLLM_CONFIG_NON_REASONING_YAML="${SCRIPT_DIR}/../vllm_config_non_reasoning.yaml"
 kubectl create configmap vllm-server-config \
     --namespace="${K8S_NAMESPACE}" \
     --from-file=vllm_config.yaml="${VLLM_CONFIG_YAML}" \
-    --from-file=vllm_config_non_reasoning.yaml="${VLLM_CONFIG_NON_REASONING_YAML}" \
     --dry-run=client -o yaml | kubectl apply -f -
 echo "vLLM config ConfigMap created."
 

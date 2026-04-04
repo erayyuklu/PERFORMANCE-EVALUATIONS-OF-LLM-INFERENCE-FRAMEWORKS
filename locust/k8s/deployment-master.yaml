@@ -125,6 +125,11 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: LOCUST_STOP_TIMEOUT
+            - name: VLLM_ENABLE_THINKING
+              valueFrom:
+                configMapKeyRef:
+                  name: locust-config
+                  key: VLLM_ENABLE_THINKING
           readinessProbe:
             httpGet:
               path: /

@@ -1,5 +1,5 @@
-model: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
-reasoning-parser: deepseek_r1
+model: Qwen/Qwen3-8B
+reasoning-parser: qwen3
 max-model-len: -1
 gpu-memory-utilization: 0.90
 dtype: half

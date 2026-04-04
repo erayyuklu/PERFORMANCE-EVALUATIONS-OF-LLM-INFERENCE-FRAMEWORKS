@@ -84,8 +84,6 @@ spec:
             items:
               - key: vllm_config.yaml
                 path: vllm_config.yaml
-              - key: vllm_config_non_reasoning.yaml
-                path: vllm_config_non_reasoning.yaml
       tolerations:
         - key: "nvidia.com/gpu"
           operator: "Exists"
