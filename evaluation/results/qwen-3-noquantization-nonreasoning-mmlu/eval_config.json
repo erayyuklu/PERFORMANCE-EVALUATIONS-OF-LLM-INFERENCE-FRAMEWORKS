@@ -1,0 +1,11 @@
+{
+  "timestamp": "20260404_210211",
+  "model": "Qwen/Qwen3-8B",
+  "vllm_endpoint": "http://34.185.187.149:80",
+  "tasks": "mmlu",
+  "num_fewshot": 5,
+  "batch_size": "auto",
+  "num_concurrent": 12,
+  "enable_thinking": false,
+  "max_gen_toks": 4096
+}

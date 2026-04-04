@@ -1,8 +1,6 @@
 model: Qwen/Qwen3-8B
 reasoning-parser: qwen3
-quantization: fp8
 max-model-len: -1
-gpu-memory-utilization: 0.90
-dtype: half
+gpu-memory-utilization: 0.85
 tensor-parallel-size: 1
 port: 8000
