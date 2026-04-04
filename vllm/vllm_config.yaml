@@ -1,6 +1,6 @@
-model: Qwen/Qwen3-8B
-reasoning-parser: qwen3
+model: google/gemma-4-E4B-it
+reasoning-parser: gemma
 max-model-len: -1
-gpu-memory-utilization: 0.85
+gpu-memory-utilization: 0.90
 tensor-parallel-size: 1
 port: 8000
