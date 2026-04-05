@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy test files
 COPY locustfile.py .
+COPY locustfile_agent.py .
 COPY prompts/ prompts/
 
 # Expose ports:

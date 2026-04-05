@@ -110,6 +110,16 @@ kubectl annotate --local -f - grafana_folder="Load Testing" -o yaml | \
 kubectl apply -f -
 echo "    ✓ Locust dashboard and ServiceMonitor applied."
 
+echo "==> Applying ServiceMonitor for Agent API..."
+kubectl apply -f "${SCRIPT_DIR}/../agent/k8s/service-monitor.yaml" 2>/dev/null \
+  || echo "    ⚠ Could not apply agent ServiceMonitor (is agent namespace created?)"
+echo "    ✓ Agent ServiceMonitor applied."
+
+echo "==> Applying ServiceMonitor for Langfuse..."
+kubectl apply -f "${SCRIPT_DIR}/../langfuse/k8s/service-monitor.yaml" 2>/dev/null \
+  || echo "    ⚠ Could not apply Langfuse ServiceMonitor (is langfuse namespace created?)"
+echo "    ✓ Langfuse ServiceMonitor applied."
+
 # 6. Resolve and print external IPs (poll up to 5 min)
 echo ""
 echo "==========================================================================="

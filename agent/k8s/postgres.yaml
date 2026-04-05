@@ -1,0 +1,101 @@
+# =============================================================================
+# PostgreSQL StatefulSet for LangGraph Checkpointer
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-postgres
+  namespace: agent
+  labels:
+    app: agent-postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: agent-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: agent-postgres
+  namespace: agent
+  labels:
+    app: agent-postgres
+spec:
+  serviceName: agent-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-postgres
+  template:
+    metadata:
+      labels:
+        app: agent-postgres
+    spec:
+      # Stay on CPU node pool
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: cloud.google.com/gke-nodepool
+                    operator: NotIn
+                    values:
+                      - gpu-pool
+
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: langgraph
+            - name: POSTGRES_USER
+              value: langgraph
+            - name: POSTGRES_PASSWORD
+              value: langgraph
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - langgraph
+                - -d
+                - langgraph
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - langgraph
+                - -d
+                - langgraph
+            initialDelaySeconds: 30
+            periodSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

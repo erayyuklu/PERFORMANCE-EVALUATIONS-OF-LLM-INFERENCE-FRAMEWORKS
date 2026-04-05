@@ -1,0 +1,67 @@
+{
+  "Istanbul": {
+    "city": "Istanbul",
+    "country": "Turkey",
+    "temperature_c": 22,
+    "temperature_f": 72,
+    "condition": "Partly Cloudy",
+    "humidity": 65,
+    "wind_speed_kmh": 18,
+    "wind_direction": "NE",
+    "feels_like_c": 23,
+    "uv_index": 6,
+    "visibility_km": 10
+  },
+  "London": {
+    "city": "London",
+    "country": "United Kingdom",
+    "temperature_c": 14,
+    "temperature_f": 57,
+    "condition": "Overcast",
+    "humidity": 78,
+    "wind_speed_kmh": 22,
+    "wind_direction": "SW",
+    "feels_like_c": 12,
+    "uv_index": 3,
+    "visibility_km": 8
+  },
+  "Tokyo": {
+    "city": "Tokyo",
+    "country": "Japan",
+    "temperature_c": 26,
+    "temperature_f": 79,
+    "condition": "Clear Sky",
+    "humidity": 55,
+    "wind_speed_kmh": 12,
+    "wind_direction": "S",
+    "feels_like_c": 27,
+    "uv_index": 7,
+    "visibility_km": 15
+  },
+  "New York": {
+    "city": "New York",
+    "country": "United States",
+    "temperature_c": 18,
+    "temperature_f": 64,
+    "condition": "Sunny",
+    "humidity": 45,
+    "wind_speed_kmh": 15,
+    "wind_direction": "W",
+    "feels_like_c": 17,
+    "uv_index": 5,
+    "visibility_km": 12
+  },
+  "default": {
+    "city": "Unknown",
+    "country": "Unknown",
+    "temperature_c": 20,
+    "temperature_f": 68,
+    "condition": "Clear",
+    "humidity": 50,
+    "wind_speed_kmh": 10,
+    "wind_direction": "N",
+    "feels_like_c": 20,
+    "uv_index": 4,
+    "visibility_km": 10
+  }
+}

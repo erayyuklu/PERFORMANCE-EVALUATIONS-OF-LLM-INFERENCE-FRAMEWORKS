@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "title": "Compound Interest",
+      "summary": "Compound interest is the interest on a loan or deposit calculated based on both the initial principal and the accumulated interest from previous periods. The formula is A = P(1 + r/n)^(nt), where P is principal, r is annual rate, n is compounding frequency, and t is time in years.",
+      "url": "https://en.wikipedia.org/wiki/Compound_interest"
+    },
+    {
+      "title": "Istanbul",
+      "summary": "Istanbul is the largest city in Turkey and one of the largest cities in the world. Formerly known as Byzantium and Constantinople, it served as the capital of the Roman Empire (330–395), the Byzantine Empire (395–1204 and 1261–1453), the Latin Empire (1204–1261), and the Ottoman Empire (1453–1922). The city straddles the Bosphorus strait, lying in both Europe and Asia.",
+      "url": "https://en.wikipedia.org/wiki/Istanbul"
+    },
+    {
+      "title": "Tokyo",
+      "summary": "Tokyo is the capital and largest city of Japan. It is the seat of the Emperor of Japan and the Japanese government. Greater Tokyo is the most populous metropolitan area in the world with a population of over 37 million residents. Originally a small fishing village named Edo, it grew to become one of the largest cities in the world.",
+      "url": "https://en.wikipedia.org/wiki/Tokyo"
+    },
+    {
+      "title": "Artificial Intelligence",
+      "summary": "Artificial intelligence (AI) is intelligence demonstrated by machines, as opposed to natural intelligence displayed by animals including humans. AI research has been defined as the field of study of intelligent agents, which refers to any system that perceives its environment and takes actions that maximize its chance of achieving its goals.",
+      "url": "https://en.wikipedia.org/wiki/Artificial_intelligence"
+    },
+    {
+      "title": "Stock Market",
+      "summary": "A stock market, equity market, or share market is the aggregation of buyers and sellers of stocks (also called shares), which represent ownership claims on businesses. These may include securities listed on a public stock exchange as well as stock that is only traded privately.",
+      "url": "https://en.wikipedia.org/wiki/Stock_market"
+    }
+  ]
+}

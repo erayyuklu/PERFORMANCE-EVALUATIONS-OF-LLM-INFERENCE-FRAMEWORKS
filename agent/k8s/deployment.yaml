@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-server
+  namespace: agent
+  labels:
+    app: agent-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-server
+  template:
+    metadata:
+      labels:
+        app: agent-server
+    spec:
+      # Stay on CPU node pool
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: cloud.google.com/gke-nodepool
+                    operator: NotIn
+                    values:
+                      - gpu-pool
+
+      containers:
+        - name: agent-server
+          image: europe-west3-docker.pkg.dev/PROJECT_ID/agent/agent-langgraph:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: agent-config
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 30

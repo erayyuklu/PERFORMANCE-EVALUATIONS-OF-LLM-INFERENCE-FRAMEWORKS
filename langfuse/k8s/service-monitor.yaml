@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: langfuse-service-monitor
+  namespace: langfuse
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - langfuse
+  selector:
+    matchLabels:
+      app: langfuse-server
+  endpoints:
+    - port: http
+      path: /api/public/metrics
+      interval: 30s
+      scrapeTimeout: 10s
