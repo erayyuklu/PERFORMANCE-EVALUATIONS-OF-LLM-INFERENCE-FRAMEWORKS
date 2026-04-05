@@ -177,22 +177,24 @@ patch_vllm_args() {
 }
 
 wait_for_locust_workers() {
+  local expected_count="${LOCUST_WORKERS:-1}"
   local max_attempts="${1:-120}"
   local attempt
 
+  info "Waiting for ${expected_count} Locust worker(s) to connect to master..."
   for attempt in $(seq 1 "${max_attempts}"); do
     local worker_count
     worker_count=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
       | jq -r '.worker_count // 0' 2>/dev/null || echo "0")
-    if [[ "${worker_count}" =~ ^[0-9]+$ ]] && [[ "${worker_count}" -ge 1 ]]; then
-      info "Locust workers connected: ${worker_count}."
+    if [[ "${worker_count}" =~ ^[0-9]+$ ]] && [[ "${worker_count}" -ge "${expected_count}" ]]; then
+      info "All Locust workers connected: ${worker_count}/${expected_count}."
       return 0
     fi
-    info "Waiting for Locust workers to register on master (attempt ${attempt}/${max_attempts})..."
+    info "Waiting for Locust workers (${worker_count}/${expected_count} connected, attempt ${attempt}/${max_attempts})..."
     sleep 2
   done
 
-  echo "ERROR: No Locust workers connected to master after wait period." >&2
+  echo "ERROR: Only ${worker_count:-0}/${expected_count} Locust workers connected after wait period." >&2
   exit 1
 }
 
@@ -303,7 +305,6 @@ print_grafana_link() {
   # Save Grafana link to results directory for later reference
   if [[ -n "${RUN_DIR:-}" ]]; then
     echo "${url}" > "${RUN_DIR}/grafana_link.txt" || true
-    log "Saved Grafana link to ${RUN_DIR}/grafana_link.txt"
   fi
 }
 
@@ -333,6 +334,9 @@ ensure_locust_ready() {
     echo "ERROR: Locust master at ${LOCUST_MASTER_URL} is not reachable after port-forward." >&2
     exit 1
   fi
+
+  # Ensure all expected workers are connected before proceeding
+  wait_for_locust_workers 120
 
   # Start port-forward to Prometheus for metrics fetching
   log "Starting port-forward to Prometheus (monitoring-kube-prometheus-prometheus:9090)..."
@@ -453,6 +457,9 @@ run_locust() {
   # Record start timestamp (epoch seconds) for Prometheus query_range
   local start_ts
   start_ts=$(date +%s)
+
+  # Ensure all workers are connected before starting the swarm
+  wait_for_locust_workers 120
 
   # Trigger run via API — fail immediately on curl error
   info "Starting swarm: ${users} users at ${effective_spawn_rate} users/s..."

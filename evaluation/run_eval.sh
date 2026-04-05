@@ -33,6 +33,9 @@ while [[ $# -gt 0 ]]; do
     --enable_thinking) ENABLE_THINKING="$2"; shift 2 ;;
     --output_dir)    OUTPUT_DIR="$2";    shift 2 ;;
     --limit)         LIMIT=$2;           shift 2 ;;
+    --model_family)  MODEL_FAMILY="$2";  shift 2 ;;
+    --quantization)  QUANTIZATION="$2";  shift 2 ;;
+    --reasoning)     REASONING="$2";     shift 2 ;;
     *) die "Unknown argument: $1" ;;
   esac
 done
@@ -88,24 +91,16 @@ fi
 # ── Prepare output directory ─────────────────────────────────────────────────
 
 RUN_TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
-RUN_DIR="${SCRIPT_DIR}/${OUTPUT_DIR}/run_${RUN_TIMESTAMP}"
+
+# Construct directory based on organization format
+if [[ -n "${REASONING:-}" ]]; then
+    RUN_DIR="${SCRIPT_DIR}/${OUTPUT_DIR}/${MODEL_FAMILY}/${QUANTIZATION}/${REASONING}/${TASKS}"
+else
+    RUN_DIR="${SCRIPT_DIR}/${OUTPUT_DIR}/${MODEL_FAMILY}/${QUANTIZATION}/${TASKS}"
+fi
+
 mkdir -p "${RUN_DIR}"
 log "Results will be saved to: ${RUN_DIR}"
-
-# Save run metadata
-cat > "${RUN_DIR}/eval_config.json" <<EOF
-{
-  "timestamp": "${RUN_TIMESTAMP}",
-  "model": "${MODEL_NAME}",
-  "vllm_endpoint": "${VLLM_BASE_URL}",
-  "tasks": "${TASKS}",
-  "num_fewshot": ${NUM_FEWSHOT},
-  "batch_size": "${BATCH_SIZE}",
-  "num_concurrent": ${NUM_CONCURRENT},
-  "enable_thinking": ${ENABLE_THINKING},
-  "max_gen_toks": ${MAX_GEN_TOKS}
-}
-EOF
 
 # ── Run lm-eval ──────────────────────────────────────────────────────────────
 
@@ -146,6 +141,14 @@ python -m lm_eval --model local-completions \
 EXIT_CODE=$?
 
 if [[ ${EXIT_CODE} -eq 0 ]]; then
+    # Move files out of the model subfolder created by lm_eval
+    SANITIZED_MODEL_NAME=$(echo "${MODEL_NAME}" | sed 's/\//__/g')
+    MODEL_SUBDIR="${RUN_DIR}/${SANITIZED_MODEL_NAME}"
+    if [[ -d "${MODEL_SUBDIR}" ]]; then
+        mv "${MODEL_SUBDIR}"/* "${RUN_DIR}/" 2>/dev/null || true
+        rmdir "${MODEL_SUBDIR}" 2>/dev/null || true
+    fi
+
     log "Evaluation completed successfully!"
     log "Results saved to: ${RUN_DIR}"
 else

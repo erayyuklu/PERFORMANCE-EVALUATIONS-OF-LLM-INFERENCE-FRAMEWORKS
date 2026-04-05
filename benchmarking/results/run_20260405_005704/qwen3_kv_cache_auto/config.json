@@ -1,0 +1,16 @@
+{
+  "name": "qwen3_kv_cache_auto",
+  "description": "Baseline with default (auto) kv-cache-dtype for Qwen3-8B.",
+  "model": "Qwen/Qwen3-8B",
+  "vllm_extra_args": "",
+  "concurrency": [
+    16,
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "auto kv-cache-dtype"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "qwen3_kv_cache_fp8",
+  "description": "Using fp8 kv-cache-dtype for Qwen3-8B.",
+  "model": "Qwen/Qwen3-8B",
+  "vllm_extra_args": "--kv-cache-dtype fp8",
+  "concurrency": [
+    16,
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "fp8 kv-cache-dtype"
+}
