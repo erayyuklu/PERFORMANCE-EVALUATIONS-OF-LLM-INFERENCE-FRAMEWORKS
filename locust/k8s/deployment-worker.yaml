@@ -105,6 +105,10 @@ spec:
                 configMapKeyRef:
                   name: locust-config
                   key: VLLM_ENABLE_THINKING
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
       volumes:
         - name: worker-artifacts
           emptyDir: {}
