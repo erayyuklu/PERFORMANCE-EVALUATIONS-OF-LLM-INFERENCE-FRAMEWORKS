@@ -1,0 +1,16 @@
+{
+  "name": "gemma4_kv_turboquant_k8v4",
+  "description": "TurboQuant with FP8 keys + 4-bit values on Gemma 4 E4B — most conservative TurboQuant preset.",
+  "model": "google/gemma-4-E4B-it",
+  "vllm_extra_args": "--kv-cache-dtype turboquant_k8v4",
+  "concurrency": [
+    16,
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "FP8 keys + 4-bit values, no norm correction"
+}

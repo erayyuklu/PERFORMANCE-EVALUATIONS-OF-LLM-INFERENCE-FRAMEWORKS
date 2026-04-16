@@ -1,0 +1,82 @@
+[
+  {
+    "name": "gemma4_kv_fp8_baseline",
+    "description": "FP8 KV cache baseline for Gemma 4 E4B — reference point for TurboQuant comparison.",
+    "model": "google/gemma-4-E4B-it",
+    "vllm_extra_args": "--kv-cache-dtype fp8",
+    "concurrency": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "Gemma 4 E4B with FP8 KV cache baseline (text-only mode)"
+  },
+  {
+    "name": "gemma4_kv_turboquant_k8v4",
+    "description": "TurboQuant with FP8 keys + 4-bit values on Gemma 4 E4B — most conservative TurboQuant preset.",
+    "model": "google/gemma-4-E4B-it",
+    "vllm_extra_args": "--kv-cache-dtype turboquant_k8v4",
+    "concurrency": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "FP8 keys + 4-bit values, no norm correction"
+  },
+  {
+    "name": "gemma4_kv_turboquant_4bit_nc",
+    "description": "TurboQuant with 4-bit MSE keys + 4-bit values + norm correction on Gemma 4 E4B.",
+    "model": "google/gemma-4-E4B-it",
+    "vllm_extra_args": "--kv-cache-dtype turboquant_4bit_nc",
+    "concurrency": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "4-bit keys + 4-bit values + norm correction"
+  },
+  {
+    "name": "gemma4_kv_turboquant_k3v4_nc",
+    "description": "TurboQuant with 3-bit MSE keys + 4-bit values + norm correction on Gemma 4 E4B — high compression.",
+    "model": "google/gemma-4-E4B-it",
+    "vllm_extra_args": "--kv-cache-dtype turboquant_k3v4_nc",
+    "concurrency": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "3-bit keys + 4-bit values + norm correction"
+  },
+  {
+    "name": "gemma4_kv_turboquant_3bit_nc",
+    "description": "TurboQuant with 3-bit MSE keys + 3-bit values + norm correction on Gemma 4 E4B — maximum compression.",
+    "model": "google/gemma-4-E4B-it",
+    "vllm_extra_args": "--kv-cache-dtype turboquant_3bit_nc",
+    "concurrency": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "3-bit keys + 3-bit values + norm correction (most aggressive)"
+  }
+]

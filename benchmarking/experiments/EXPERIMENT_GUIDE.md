@@ -172,6 +172,61 @@ None — runs with the default ShareGPT dataset. vLLM deployment is automaticall
 
 ---
 
+## 5. `turboquant_kv_cache.json` — TurboQuant KV Cache Quantization (Gemma 4)
+
+### Why?
+Our previous experiments (Run 2, 10-04 report) showed that FP8 KV cache quantization dramatically improves high-concurrency performance — TTFT dropped from 30s to 400ms at u64, and throughput tripled at u128. **TurboQuant takes KV cache compression even further**, going down to 3-4 bits per element. The question is: **how much further can we push concurrency and throughput before quality starts to degrade?**
+
+TurboQuant uses PolarQuant (random rotation + Lloyd-Max scalar quantization) to compress KV cache values. It's data-oblivious — no calibration data or fine-tuning needed.
+
+### Model & Docker Image
+
+These experiments use **google/gemma-4-E4B-it** — a dense 4B parameter multimodal model from Google's Gemma 4 family. Key details:
+- **Docker image**: `vllm/vllm-openai:gemma4` (dedicated Gemma 4 image)
+- **Reasoning parser**: `--reasoning-parser gemma4` (uses `<|channel>thought\n...<channel|>` delimiters)
+- **Text-only mode**: `--limit-mm-per-prompt image=0,audio=0` (skips multimodal profiling to save memory)
+- **Single GPU**: E4B fits on a single L4 (24GB VRAM)
+
+### Experiments
+
+| Experiment | `--kv-cache-dtype` | Key Bits | Value Bits | Norm Correction |
+|---|---|---|---|---|
+| `gemma4_kv_fp8_baseline` | `fp8` | FP8 (8-bit) | FP8 (8-bit) | N/A |
+| `gemma4_kv_turboquant_k8v4` | `turboquant_k8v4` | FP8 (8-bit) | 4-bit | No |
+| `gemma4_kv_turboquant_4bit_nc` | `turboquant_4bit_nc` | 4-bit MSE | 4-bit | Yes |
+| `gemma4_kv_turboquant_k3v4_nc` | `turboquant_k3v4_nc` | 3-bit MSE | 4-bit | Yes |
+| `gemma4_kv_turboquant_3bit_nc` | `turboquant_3bit_nc` | 3-bit MSE | 3-bit | Yes |
+
+All experiments pass `--limit-mm-per-prompt image=0,audio=0` for text-only benchmarking (no multimodal overhead).
+
+Each runs at 16, 32, 64, and 128 concurrent users.
+
+### ConfigMap Changes
+- `VLLM_MODEL_NAME` needs to be set to `google/gemma-4-E4B-it` via configmap override or manual update before running.
+
+### Expected Results
+
+| Preset | KV Cache Usage | TTFT @ u128 | Throughput @ u128 | Quality Loss |
+|--------|---------------|-------------|-------------------|-------------|
+| **FP8 (baseline)** | Reference | Reference | Reference | Reference |
+| **k8v4** | ↓ ~25-30% lower | ↓ Moderate improvement | ↑ Moderate gain | ↓ Minimal (< 1%) |
+| **4bit_nc** | ↓ ~40-50% lower | ↓ Significant improvement | ↑ Significant gain | ↓ Small (1-2%) |
+| **k3v4_nc** | ↓ ~50-60% lower | ↓ Large improvement | ↑ Large gain | ↓ Moderate (2-4%) |
+| **3bit_nc** | ↓ ~60-70% lower | ↓ Largest improvement | ↑ Largest gain | ↓ Notable (3-6%) |
+
+**Hypothesis:** "`k8v4` will be the safest option with almost no quality loss, while `3bit_nc` will maximize throughput at the cost of measurable accuracy degradation. The sweet spot will likely be `4bit_nc` or `k3v4_nc` — offering significant memory savings with acceptable quality trade-off."
+
+### Post-experiment
+```bash
+# Run quality evaluation for each TurboQuant preset (update MODEL_NAME to google/gemma-4-E4B-it):
+bash evaluation/run_eval.sh --model_family gemma-4 --quantization turboquant-k8v4 --reasoning reasoning --tasks arc_challenge
+bash evaluation/run_eval.sh --model_family gemma-4 --quantization turboquant-k8v4 --reasoning reasoning --tasks mmlu
+bash evaluation/run_eval.sh --model_family gemma-4 --quantization turboquant-k8v4 --reasoning reasoning --tasks gsm8k
+# Repeat for each preset: turboquant-4bit-nc, turboquant-k3v4-nc, turboquant-3bit-nc
+```
+
+---
+
 ## Execution Summary
 
 ```
@@ -185,8 +240,11 @@ None — runs with the default ShareGPT dataset. vLLM deployment is automaticall
    └── + 3× lm-eval              +  3 quality evaluations (same model, thinking disabled)
 
 4. experiments_server_tuning.json ~ 17 Locust runs  (7 experiments × 2-3 concurrency levels)
+
+5. turboquant_kv_cache.json      ~ 20 Locust runs  (5 experiments × 4 concurrency levels)
+   └── + 12× lm-eval             + 12 quality evaluations (4 presets × 3 tasks)
 ```
 
-**Total: ~41 Locust runs + ~6 lm-eval evaluations**
+**Total: ~61 Locust runs + ~18 lm-eval evaluations**
 
-Each Locust run takes ~3 minutes (180s) plus cooldown and rollout time. Server tuning experiments require deployment restarts (~15 min rollout each), so that batch may take ~3-4 hours. Other batches take approximately 30-45 minutes each.
+Each Locust run takes ~3 minutes (180s) plus cooldown and rollout time. Server tuning and TurboQuant experiments require deployment restarts (~15 min rollout each), so those batches may take ~4-5 hours. Other batches take approximately 30-45 minutes each.

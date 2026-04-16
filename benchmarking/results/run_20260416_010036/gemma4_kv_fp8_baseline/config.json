@@ -1,0 +1,16 @@
+{
+  "name": "gemma4_kv_fp8_baseline",
+  "description": "FP8 KV cache baseline for Gemma 4 E4B — reference point for TurboQuant comparison.",
+  "model": "google/gemma-4-E4B-it",
+  "vllm_extra_args": "--kv-cache-dtype fp8",
+  "concurrency": [
+    16,
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "Gemma 4 E4B with FP8 KV cache baseline (text-only mode)"
+}
