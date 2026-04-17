@@ -55,7 +55,7 @@ start_ts_no_think=$(now_ms)
 CHAT_RESPONSE_NO_THINK=$(curl -s "${BASE_URL}/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{
-        \"model\": \"Qwen/Qwen3-8B\",
+        \"model\": \"${MODEL_NAME}\",
         \"messages\": [
             {
                 \"role\": \"user\",
