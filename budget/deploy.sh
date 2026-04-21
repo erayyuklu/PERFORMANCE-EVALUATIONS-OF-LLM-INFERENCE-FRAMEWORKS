@@ -118,7 +118,7 @@ else
         --credit-types-treatment=exclude-all-credits \
         --threshold-rule=percent=${BUDGET_THRESHOLD} \
         --notifications-rule-pubsub-topic="${FULL_TOPIC}" \
-        --calendar-period=year
+        --calendar-period=year \
         --quiet
 
     echo "Budget created."
