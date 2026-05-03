@@ -6,11 +6,12 @@
 #   ./run_agent_experiment.sh [--experiment-file experiments.json]
 #                             [--experiment <name>] [--run-time <duration>]
 #                             [--spawn-time <duration>]
+#                             [--skip-patch]
 #                             [--dry-run]
 #
 # What this script does for each experiment configuration:
-#   1. Patch the Locust ConfigMap to target the Agent API
-#   2. Switch Locust to use locustfile_agent.py
+#   1. Patch the Locust ConfigMap to target the Agent API (unless skipped)
+#   2. Switch Locust to use locustfile_agent.py (unless skipped)
 #   3. Trigger load test via the in-cluster Locust master REST API
 #   4. Run Locust for each concurrency level (users)
 #   5. Save all results under results/<run_id>/
@@ -32,6 +33,7 @@ RESULTS_BASE="${SCRIPT_DIR}/results"
 PORT_FORWARD_PID=""
 PROM_PORT_FORWARD_PID=""
 DRY_RUN=false
+SKIP_PATCH=false
 
 # Agent experiment config
 AGENT_RUN_TIME="${LOCUST_RUN_TIME:-180s}"
@@ -52,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --experiment)      EXPERIMENT_NAME="$2";       shift 2 ;;
     --run-time)        AGENT_RUN_TIME="$2";        shift 2 ;;
     --spawn-time)      AGENT_SPAWN_TIME="$2";      shift 2 ;;
+    --skip-patch)      SKIP_PATCH=true;            shift   ;;
     --dry-run)         DRY_RUN=true;               shift   ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
@@ -82,10 +85,6 @@ cleanup() {
   if [[ -n "${PROM_PORT_FORWARD_PID}" ]]; then
     kill "${PROM_PORT_FORWARD_PID}" 2>/dev/null || true
   fi
-
-  # Restore Locust to original vLLM config
-  log "Restoring Locust ConfigMap to vLLM mode..."
-  restore_locust_configmap || true
 }
 trap cleanup EXIT
 
@@ -197,33 +196,49 @@ patch_locust_for_agent() {
   info "Locust patched for agent mode."
 }
 
-restore_locust_configmap() {
-  if [[ -z "${ORIGINAL_HOST}" ]]; then
-    return 0
+print_grafana_link() {
+  local duration_sec="${AGENT_RUN_TIME%s}"
+
+  # Count total individual locust runs across all experiments
+  local total_runs=0
+  for idx in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
+    local e n_users
+    e=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}]")
+    n_users=$(echo "${e}" | jq '.concurrency | length')
+    total_runs=$(( total_runs + n_users ))
+  done
+
+  # Expected window: runs × (duration + cooldown) + 2 min overhead buffer
+  local total_sec=$(( total_runs * (duration_sec + AGENT_COOLDOWN_SEC) + 120 ))
+
+  local from_ms to_ms
+  from_ms=$(python3 -c 'import time; print(int(time.time() * 1000))')
+  to_ms=$(( from_ms + total_sec * 1000 ))
+
+  # Resolve Grafana external IP
+  local grafana_ip
+  grafana_ip=$(
+    kubectl get svc -n monitoring \
+      -l "app.kubernetes.io/name=grafana" \
+      -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || true
+  )
+
+  if [[ -z "${grafana_ip}" ]]; then
+    log "⚠  Could not resolve Grafana external IP — dashboard link unavailable."
+    return
   fi
 
-  log "Restoring Locust to original vLLM mode..."
+  local url="http://${grafana_ip}/d/locust-load-test/locust-load-test?orgId=1&from=${from_ms}&to=${to_ms}"
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  log "  Grafana — Locust Dashboard (absolute time range)"
+  log "  Covers ${total_runs} run(s) × ${duration_sec}s + overhead"
+  log "  ${url}"
+  log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Restore ConfigMap
-  kubectl patch configmap locust-config -n "${LOCUST_NAMESPACE}" -p \
-    "{\"data\":{\"VLLM_TARGET_HOST\":\"${ORIGINAL_HOST}\"}}"
-
-  # Restore master deployment to original locustfile
-  kubectl patch deployment locust-master -n "${LOCUST_NAMESPACE}" --type=json -p \
-    "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--master\",\"-f\",\"/locust/locustfile.py\",\"--stop-timeout\",\"${LOCUST_STOP_WAIT_SEC:-300}\",\"--csv=/tmp/locust\",\"--csv-full-history\"]}]"
-
-  # Restore worker deployment
-  kubectl patch deployment locust-worker -n "${LOCUST_NAMESPACE}" --type=json -p \
-    "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--worker\",\"--master-host=locust-master\",\"-f\",\"/locust/locustfile.py\"]}]"
-
-  # Restart
-  kubectl rollout restart deployment/locust-master -n "${LOCUST_NAMESPACE}"
-  wait_for_deployment "locust-master" "${LOCUST_NAMESPACE}"
-  sleep 10
-  kubectl rollout restart deployment/locust-worker -n "${LOCUST_NAMESPACE}"
-  wait_for_deployment "locust-worker" "${LOCUST_NAMESPACE}"
-
-  info "Locust restored to vLLM mode."
+  # Save Grafana link to results directory for later reference
+  if [[ -n "${RUN_DIR:-}" ]]; then
+    echo "${url}" > "${RUN_DIR}/grafana_link.txt" || true
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -273,37 +288,33 @@ run_agent_locust() {
   local end_ts
   end_ts=$(date +%s)
 
-  # Download Locust CSV exports
+  # ---- Download Locust CSV exports from master ----
   curl -sf "${LOCUST_MASTER_URL}/stats/requests/csv" -o "${out_csv}_stats.csv" || true
   curl -sf "${LOCUST_MASTER_URL}/stats/failures/csv" -o "${out_csv}_failures.csv" || true
   curl -sf "${LOCUST_MASTER_URL}/exceptions/csv" -o "${out_csv}_exceptions.csv" || true
   curl -sf "${LOCUST_MASTER_URL}/stats/requests_full_history/csv" -o "${out_csv}_stats_history.csv" || true
 
-  # Fetch Prometheus metrics
-  if [[ -f "${SCRIPT_DIR}/fetch_metrics.sh" ]]; then
-    log "Fetching Prometheus metrics for ${label}..."
-    "${SCRIPT_DIR}/fetch_metrics.sh" \
-      --start "${start_ts}" --end "${end_ts}" \
-      --output "${out_csv}_prometheus_metrics.csv" \
-      --prometheus-url "${PROMETHEUS_URL}" || true
-  fi
-
-  # Copy per-request files from worker pods
+  # ---- Copy per-request files from worker pods ----
+  # Workers write their own shard on test_stop; we concatenate them locally.
   log "Copying per-request files from Locust worker pods..."
-  sleep 10
+  sleep 10  # allow test_stop handlers on workers to finish writing
 
   local worker_pods
   worker_pods=$(kubectl get pod -n "${LOCUST_NAMESPACE}" \
     -l app=locust,role=worker \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
 
-  if [[ -n "${worker_pods}" ]]; then
+  if [[ -z "${worker_pods}" ]]; then
+    info "WARNING: No worker pods found — skipping per-request file copy."
+  else
     local first_worker=true
+    local tmp_csv tmp_jsonl
     for pod in ${worker_pods}; do
-      local tmp_csv="${pod}_agent_custom.csv"
-      local tmp_jsonl="${pod}_agent_responses.jsonl"
+      tmp_csv="${pod}_agent_custom.csv"
+      tmp_jsonl="${pod}_agent_responses.jsonl"
 
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_metrics.csv" "${tmp_csv}" 2>/dev/null; then
+      # Agent metrics CSV — first worker becomes the file, rest are appended (no header)
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_metrics.csv" "${tmp_csv}"; then
         if [[ "${first_worker}" == "true" ]]; then
           mv "${tmp_csv}" "${out_csv}_agent_metrics.csv"
           first_worker=false
@@ -312,14 +323,31 @@ run_agent_locust() {
           rm -f "${tmp_csv}"
         fi
         info "Agent metrics copied from ${pod}."
+      else
+        info "WARNING: Could not fetch agent metrics from ${pod}."
       fi
 
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_responses.jsonl" "${tmp_jsonl}" 2>/dev/null; then
+      # Agent responses JSONL — simply concatenate
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_responses.jsonl" "${tmp_jsonl}"; then
         cat "${tmp_jsonl}" >> "${out_csv}_agent_responses.jsonl"
         rm -f "${tmp_jsonl}"
         info "Agent responses copied from ${pod}."
+      else
+        info "WARNING: Could not fetch agent responses from ${pod}."
       fi
     done
+    [[ "${first_worker}" == "false" ]] \
+      && info "Per-request files saved to $(dirname "${out_csv}")/" \
+      || info "WARNING: No per-request data was collected from any worker."
+  fi
+
+  # ---- Fetch Prometheus metrics ----
+  if [[ -f "${SCRIPT_DIR}/fetch_metrics.sh" ]]; then
+    log "Fetching Prometheus metrics for ${label}..."
+    "${SCRIPT_DIR}/fetch_metrics.sh" \
+      --start "${start_ts}" --end "${end_ts}" \
+      --output "${out_csv}_prometheus_metrics.csv" \
+      --prometheus-url "${PROMETHEUS_URL}" || true
   fi
 }
 
@@ -366,6 +394,7 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     info "concurrency:  ${users_list}"
     info "run_time:     ${AGENT_RUN_TIME}"
     info "spawn_time:   ${AGENT_SPAWN_TIME}"
+    info "skip_patch:   ${SKIP_PATCH}"
     info "cooldown_sec: ${AGENT_COOLDOWN_SEC}"
   done
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -375,7 +404,11 @@ fi
 # ---------------------------------------------------------------------------
 # Setup: patch Locust for agent mode, set up port-forwards
 # ---------------------------------------------------------------------------
-patch_locust_for_agent
+if [[ "${SKIP_PATCH}" == "true" ]]; then
+  log "Skipping Locust patch for agent mode; using current Locust config."
+else
+  patch_locust_for_agent
+fi
 
 log "Starting port-forward to Locust master..."
 kubectl port-forward svc/locust-master 8089:8089 -n "${LOCUST_NAMESPACE}" &>/dev/null &
@@ -396,13 +429,15 @@ PROM_PORT_FORWARD_PID=$!
 
 wait_for_locust_workers 120
 
+print_grafana_link
+
 # ---------------------------------------------------------------------------
 # Run experiments
 # ---------------------------------------------------------------------------
 for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
   exp_name=$(echo "${exp}" | jq -r '.name' | tr -d '\r')
-  users_list=$(echo "${exp}" | jq -r '.concurrency[]')
+  users_list=$(echo "${exp}" | jq -r '.concurrency[]' | tr -d '\r')
 
   log ""
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

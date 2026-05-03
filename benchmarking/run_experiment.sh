@@ -6,6 +6,7 @@
 #   ./run_experiment.sh [--experiment-file experiments.json]
 #                       [--experiment <name>] [--run-time <duration>]
 #                       [--spawn-time <duration>]
+#                       [--agent]
 #                       [--skip-patch]
 #                       [--dry-run]
 #
@@ -27,8 +28,12 @@ source "${SCRIPT_DIR}/config.env"
 # ---------------------------------------------------------------------------
 # Script-internal state (configurable parameters live in config.env)
 # ---------------------------------------------------------------------------
-EXPERIMENT_FILE="${EXPERIMENT_FILE:-${SCRIPT_DIR}/experiments/experiments.json}"
+EXPERIMENT_FILE_DEFAULT="${SCRIPT_DIR}/experiments/experiments.json"
+EXPERIMENT_FILE="${EXPERIMENT_FILE:-}"
 EXPERIMENT_NAME=""                              # if set, run only this experiment
+AGENT_MODE=false
+AGENT_LOCUSTFILE="/locust/locustfile_agent.py"
+AGENT_TARGET_HOST="http://agent-service.agent.svc.cluster.local"
 RESULTS_BASE="${SCRIPT_DIR}/results"
 NAMESPACE="${K8S_NAMESPACE:-vllm}"
 DEPLOYMENT_NAME="vllm-server"
@@ -52,11 +57,20 @@ while [[ $# -gt 0 ]]; do
     --experiment)      EXPERIMENT_NAME="$2";   shift 2 ;;
     --run-time)        LOCUST_RUN_TIME="$2";   shift 2 ;;
     --spawn-time)      SPAWN_TIME="$2";        shift 2 ;;
+    --agent)           AGENT_MODE=true;        shift   ;;
     --skip-patch)      SKIP_PATCH=true;         shift   ;;
     --dry-run)         DRY_RUN=true;           shift   ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
+
+if [[ -z "${EXPERIMENT_FILE}" ]]; then
+  if [[ "${AGENT_MODE}" == "true" ]]; then
+    EXPERIMENT_FILE="${SCRIPT_DIR}/experiments/agent_load_test.json"
+  else
+    EXPERIMENT_FILE="${EXPERIMENT_FILE_DEFAULT}"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -266,13 +280,17 @@ print_grafana_link() {
     local e n_users n_cats extra_args exp_model
     e=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}]")
     n_users=$(echo "${e}" | jq '.concurrency | length')
-    n_cats=$(echo "${e}" | jq '.prompt_categories | length')
-    exp_model=$(echo "${e}" | jq -r '.model // ""')
-    extra_args=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}].vllm_extra_args // \"\"")
-    if [[ -n "${exp_model}" || -n "${extra_args}" ]]; then
-      rollout_count=$(( rollout_count + 1 ))
+    if [[ "${AGENT_MODE}" == "true" ]]; then
+      total_runs=$(( total_runs + n_users ))
+    else
+      n_cats=$(echo "${e}" | jq '.prompt_categories | length')
+      exp_model=$(echo "${e}" | jq -r '.model // ""')
+      extra_args=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[${idx}].vllm_extra_args // \"\"")
+      if [[ -n "${exp_model}" || -n "${extra_args}" ]]; then
+        rollout_count=$(( rollout_count + 1 ))
+      fi
+      total_runs=$(( total_runs + n_users * n_cats ))
     fi
-    total_runs=$(( total_runs + n_users * n_cats ))
   done
 
   # Expected window: runs × (duration + cooldown) + rollouts + 2 min overhead buffer
@@ -310,6 +328,49 @@ print_grafana_link() {
 
 # Called ONCE before the main loop to avoid repeating readiness checks per run.
 ensure_locust_ready() {
+  if [[ "${AGENT_MODE}" == "true" ]]; then
+    if [[ "${SKIP_PATCH}" == "true" ]]; then
+      log "Skipping Locust patch for agent mode; using current Locust config."
+    else
+      log "Setting Locust ready for agent benchmark..."
+      kubectl patch configmap locust-config -n "${LOCUST_NAMESPACE}" -p \
+        "{\"data\":{\"VLLM_TARGET_HOST\":\"${AGENT_TARGET_HOST}\",\"AGENT_REQUEST_TIMEOUT\":\"${AGENT_REQUEST_TIMEOUT:-120}\"}}"
+      kubectl patch deployment locust-master -n "${LOCUST_NAMESPACE}" --type=json -p \
+        "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--master\",\"-f\",\"${AGENT_LOCUSTFILE}\",\"--stop-timeout\",\"${LOCUST_STOP_WAIT_SEC:-300}\",\"--csv=/tmp/locust\",\"--csv-full-history\"]}]"
+      kubectl patch deployment locust-worker -n "${LOCUST_NAMESPACE}" --type=json -p \
+        "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--worker\",\"--master-host=locust-master\",\"-f\",\"${AGENT_LOCUSTFILE}\"]}]"
+      kubectl rollout restart deployment/locust-master -n "${LOCUST_NAMESPACE}"
+      wait_for_deployment "locust-master" "${LOCUST_NAMESPACE}"
+      sleep 10
+      kubectl rollout restart deployment/locust-worker -n "${LOCUST_NAMESPACE}"
+      wait_for_deployment "locust-worker" "${LOCUST_NAMESPACE}"
+      info "Locust patched for agent mode."
+    fi
+  else
+    log "Setting Locust ready for normal benchmark..."
+
+    # Restore ConfigMap
+    kubectl patch configmap locust-config -n "${LOCUST_NAMESPACE}" -p \
+      "{\"data\":{\"VLLM_TARGET_HOST\":\"http://vllm-service.vllm.svc.cluster.local\"}}"
+
+    # Restore master deployment to original locustfile
+    kubectl patch deployment locust-master -n "${LOCUST_NAMESPACE}" --type=json -p \
+      "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--master\",\"-f\",\"/locust/locustfile.py\",\"--stop-timeout\",\"${LOCUST_STOP_WAIT_SEC:-300}\",\"--csv=/tmp/locust\",\"--csv-full-history\"]}]"
+
+    # Restore worker deployment
+    kubectl patch deployment locust-worker -n "${LOCUST_NAMESPACE}" --type=json -p \
+      "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--worker\",\"--master-host=locust-master\",\"-f\",\"/locust/locustfile.py\"]}]"
+
+    # Restart
+    kubectl rollout restart deployment/locust-master -n "${LOCUST_NAMESPACE}"
+    wait_for_deployment "locust-master" "${LOCUST_NAMESPACE}"
+    sleep 10
+    kubectl rollout restart deployment/locust-worker -n "${LOCUST_NAMESPACE}"
+    wait_for_deployment "locust-worker" "${LOCUST_NAMESPACE}"
+
+    info "Locust restored to vLLM mode."
+  fi
+
   log "Waiting for Locust pods to be ready..."
   kubectl wait --for=condition=Ready pod -l app=locust \
     -n "${LOCUST_NAMESPACE}" --timeout=300s
@@ -525,17 +586,29 @@ run_locust() {
   else
     local first_worker=true
     local tmp_csv tmp_jsonl
+    local custom_metrics_src="locust_custom_metrics.csv"
+    local responses_src="locust_responses.jsonl"
+    local out_metrics_file="${out_csv}_custom_metrics.csv"
+    local out_responses_file="${out_csv}_prompt_responses.jsonl"
+    
+    if [[ "${AGENT_MODE}" == "true" ]]; then
+      custom_metrics_src="locust_agent_metrics.csv"
+      responses_src="locust_agent_responses.jsonl"
+      out_metrics_file="${out_csv}_agent_metrics.csv"
+      out_responses_file="${out_csv}_agent_responses.jsonl"
+    fi
+
     for pod in ${worker_pods}; do
       tmp_csv="${pod}_custom.csv"
       tmp_jsonl="${pod}_responses.jsonl"
 
       # Custom metrics CSV — first worker becomes the file, rest are appended (no header)
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_custom_metrics.csv" "${tmp_csv}"; then
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/${custom_metrics_src}" "${tmp_csv}"; then
         if [[ "${first_worker}" == "true" ]]; then
-          mv "${tmp_csv}" "${out_csv}_custom_metrics.csv"
+          mv "${tmp_csv}" "${out_metrics_file}"
           first_worker=false
         else
-          tail -n +2 "${tmp_csv}" >> "${out_csv}_custom_metrics.csv"
+          tail -n +2 "${tmp_csv}" >> "${out_metrics_file}"
           rm -f "${tmp_csv}"
         fi
         info "Custom metrics copied from ${pod}."
@@ -544,8 +617,8 @@ run_locust() {
       fi
 
       # Prompt/response JSONL — simply concatenate
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_responses.jsonl" "${tmp_jsonl}"; then
-        cat "${tmp_jsonl}" >> "${out_csv}_prompt_responses.jsonl"
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/${responses_src}" "${tmp_jsonl}"; then
+        cat "${tmp_jsonl}" >> "${out_responses_file}"
         rm -f "${tmp_jsonl}"
         info "Prompt/response log copied from ${pod}."
       else
@@ -561,7 +634,11 @@ run_locust() {
 # ---------------------------------------------------------------------------
 # Main experiment loop
 # ---------------------------------------------------------------------------
-RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
+if [[ "${AGENT_MODE}" == "true" ]]; then
+  RUN_ID="agent_run_$(date +%Y%m%d_%H%M%S)"
+else
+  RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
+fi
 RUN_DIR="${RESULTS_BASE}/${RUN_ID}"
 mkdir -p "${RUN_DIR}"
 
@@ -594,31 +671,44 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
     exp=$(echo "${EXPERIMENTS_JSON}" | jq -r ".[$i]")
     exp_name=$(echo "${exp}" | jq -r '.name' | tr -d '\r')
-    exp_model=$(echo "${exp}" | jq -r '.model // ""' | tr -d '\r')
-    extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""' | tr -d '\r')
-
-    if [[ "${extra_args}" =~ (^|[[:space:]])--model[[:space:]]+([^[:space:]]+) ]]; then
-      legacy_model="${BASH_REMATCH[2]}"
-      if [[ -z "${exp_model}" ]]; then
-        exp_model="${legacy_model}"
-      fi
-      extra_args=$(echo "${extra_args}" | sed -E 's/(^|[[:space:]])--model[[:space:]]+[^[:space:]]+//g' | xargs || true)
-    fi
-
-    [[ -z "${extra_args}" ]] && extra_args="(none)"
-    [[ -z "${exp_model}" ]] && exp_model="(default from YAML)"
-
     users_list=$(echo "${exp}" | jq -r '[.concurrency[]] | join(", ")')
-    prompt_categories=$(echo "${exp}" | jq -r '[.prompt_categories[]] | join(", ")')
-    log "[$((i+1))/${NUM_EXPERIMENTS}] ${exp_name}"
-    info "model:             ${exp_model}"
-    info "extra_args:        ${extra_args}"
-    info "concurrency:       ${users_list}"
-    info "run_time:          ${LOCUST_RUN_TIME}"
-    info "spawn_time:        ${SPAWN_TIME:-(1s default via user_count)}"
-    info "spawn_rate:        computed per user_count (users / spawn_time)"
-    info "skip_patch:        ${SKIP_PATCH}"
-    info "cooldown_sec:      ${COOLDOWN_SEC}"
+    
+    if [[ "${AGENT_MODE}" == "true" ]]; then
+      log "[$((i+1))/${NUM_EXPERIMENTS}] ${exp_name}"
+      info "target:            ${AGENT_TARGET_HOST}"
+      info "locustfile:        ${AGENT_LOCUSTFILE}"
+      info "concurrency:       ${users_list}"
+      info "run_time:          ${LOCUST_RUN_TIME}"
+      info "spawn_time:        ${SPAWN_TIME:-(1s default via user_count)}"
+      info "spawn_rate:        computed per user_count (users / spawn_time)"
+      info "skip_patch:        ${SKIP_PATCH}"
+      info "cooldown_sec:      ${COOLDOWN_SEC}"
+    else
+      exp_model=$(echo "${exp}" | jq -r '.model // ""' | tr -d '\r')
+      extra_args=$(echo "${exp}" | jq -r '.vllm_extra_args // ""' | tr -d '\r')
+
+      if [[ "${extra_args}" =~ (^|[[:space:]])--model[[:space:]]+([^[:space:]]+) ]]; then
+        legacy_model="${BASH_REMATCH[2]}"
+        if [[ -z "${exp_model}" ]]; then
+          exp_model="${legacy_model}"
+        fi
+        extra_args=$(echo "${extra_args}" | sed -E 's/(^|[[:space:]])--model[[:space:]]+[^[:space:]]+//g' | xargs || true)
+      fi
+
+      [[ -z "${extra_args}" ]] && extra_args="(none)"
+      [[ -z "${exp_model}" ]] && exp_model="(default from YAML)"
+
+      prompt_categories=$(echo "${exp}" | jq -r '[.prompt_categories[]] | join(", ")')
+      log "[$((i+1))/${NUM_EXPERIMENTS}] ${exp_name}"
+      info "model:             ${exp_model}"
+      info "extra_args:        ${extra_args}"
+      info "concurrency:       ${users_list}"
+      info "run_time:          ${LOCUST_RUN_TIME}"
+      info "spawn_time:        ${SPAWN_TIME:-(1s default via user_count)}"
+      info "spawn_rate:        computed per user_count (users / spawn_time)"
+      info "skip_patch:        ${SKIP_PATCH}"
+      info "cooldown_sec:      ${COOLDOWN_SEC}"
+    fi
   done
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 0
@@ -658,7 +748,10 @@ for i in $(seq 0 $((NUM_EXPERIMENTS - 1))); do
   # Save experiment config
   echo "${exp}" | jq '.' > "${EXP_DIR}/config.json"
 
-  if [[ "${SKIP_PATCH}" == "true" ]]; then
+  if [[ "${AGENT_MODE}" == "true" ]]; then
+    # Do not patch vLLM args for agent mode
+    true
+  elif [[ "${SKIP_PATCH}" == "true" ]]; then
     log "Skipping vLLM deployment patch for ${exp_name}; using current server args/config."
   else
     # Patch per experiment so overrides are deterministic.

@@ -114,8 +114,10 @@ if _HAS_PROM_CLIENT:
 @events.test_start.add_listener
 def _on_test_start(environment, **kwargs):
     """Clear per-run buffers so each swarm run produces its own output files."""
+    global _files_written
     _custom_rows.clear()
     _response_rows.clear()
+    _files_written = False
 
 
 @events.init.add_listener
@@ -240,11 +242,22 @@ def _percentile(data: list[float], pct: int) -> float:
 _RESPONSES_POD_PATH = ARTIFACTS_DIR / "locust_agent_responses.jsonl"
 _CUSTOM_METRICS_POD_PATH = ARTIFACTS_DIR / "locust_agent_metrics.csv"
 
+# Guard against double-writes (test_stop + quitting can both fire)
+_files_written = False
+
 
 @events.test_stop.add_listener
 def _on_test_stop(environment, **kwargs):
-    _write_custom_metrics(environment)
-    _write_responses(environment)
+    global _files_written
+    try:
+        _write_custom_metrics(environment)
+        _write_responses(environment)
+        _files_written = True
+    except Exception:
+        logger.exception("[agent-bench] Error writing files in test_stop")
+
+
+
 
 
 def _write_responses(environment):
