@@ -44,10 +44,15 @@ docker push "${IMAGE_TAG}"
 echo "==> Applying Kubernetes manifests..."
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
-# Create ConfigMap from config.env
+# Create ConfigMap from config.env and optionally .env
+CONFIG_ARGS=("--from-env-file=${SCRIPT_DIR}/config.env")
+if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+    CONFIG_ARGS+=("--from-env-file=${SCRIPT_DIR}/.env")
+fi
+
 kubectl create configmap agent-config \
     --namespace="${NAMESPACE}" \
-    --from-env-file="${SCRIPT_DIR}/config.env" \
+    "${CONFIG_ARGS[@]}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
 # Deploy PostgreSQL checkpointer first

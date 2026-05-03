@@ -1,22 +1,23 @@
 # =============================================================================
-# Langfuse Web Server Deployment + LoadBalancer Service (v4)
+# Langfuse Worker Deployment for v4
+# Asynchronously processes events from S3 into ClickHouse.
 # =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: langfuse-server
+  name: langfuse-worker
   namespace: langfuse
   labels:
-    app: langfuse-server
+    app: langfuse-worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: langfuse-server
+      app: langfuse-worker
   template:
     metadata:
       labels:
-        app: langfuse-server
+        app: langfuse-worker
     spec:
       affinity:
         nodeAffinity:
@@ -30,11 +31,11 @@ spec:
                       - gpu-pool
 
       containers:
-        - name: langfuse
-          image: langfuse/langfuse:latest
+        - name: langfuse-worker
+          image: langfuse/langfuse-worker:latest
           ports:
             - name: http
-              containerPort: 3000
+              containerPort: 3030
               protocol: TCP
           env:
             # ── Postgres ──
@@ -43,8 +44,6 @@ spec:
             # ── Auth / Encryption ──
             - name: NEXTAUTH_URL
               value: "http://localhost:3000"
-            - name: NEXTAUTH_SECRET
-              value: "langfuse-nextauth-secret-change-me"
             - name: SALT
               value: "langfuse-salt-change-me"
             - name: ENCRYPTION_KEY
@@ -111,30 +110,13 @@ spec:
               memory: "1Gi"
           readinessProbe:
             httpGet:
-              path: /api/public/health
-              port: 3000
+              path: /api/health
+              port: 3030
             initialDelaySeconds: 30
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /api/public/health
-              port: 3000
+              path: /api/health
+              port: 3030
             initialDelaySeconds: 60
             periodSeconds: 30
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: langfuse-service
-  namespace: langfuse
-  labels:
-    app: langfuse-server
-spec:
-  type: LoadBalancer
-  selector:
-    app: langfuse-server
-  ports:
-    - name: http
-      protocol: TCP
-      port: 3000
-      targetPort: 3000

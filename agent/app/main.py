@@ -24,7 +24,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from .config import settings
 from .graph import create_agent_graph
 from .schemas import AgentRequest, AgentResponse
-from .observability import get_langfuse_handler
+from .observability import get_langfuse_handler, flush_langfuse, shutdown_langfuse
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -60,12 +60,15 @@ async def lifespan(app: FastAPI):
             checkpointer = None
 
     app.state.graph = create_agent_graph(checkpointer=checkpointer)
-    app.state.langfuse_handler = get_langfuse_handler()
+
+    # Eagerly initialise the Langfuse handler so it logs at startup
+    get_langfuse_handler()
 
     logger.info("[main] Agent API ready.")
     yield
 
     # Cleanup
+    shutdown_langfuse()
     if checkpointer is not None:
         try:
             await checkpointer.conn.close()
@@ -103,8 +106,9 @@ async def run_agent(request: AgentRequest):
 
     # Build config with optional Langfuse callback
     config: dict = {}
-    if app.state.langfuse_handler:
-        config["callbacks"] = [app.state.langfuse_handler]
+    handler = get_langfuse_handler()
+    if handler:
+        config["callbacks"] = [handler]
 
     # Use session_id for checkpointed conversations, or generate a fresh one
     thread_id = request.session_id or str(uuid.uuid4())
@@ -115,6 +119,9 @@ async def run_agent(request: AgentRequest):
         {"messages": [("user", request.task)]},
         config=config,
     )
+
+    # Flush Langfuse events so traces reach the server immediately
+    flush_langfuse()
 
     t_end = time.perf_counter()
     duration_ms = (t_end - t_start) * 1000

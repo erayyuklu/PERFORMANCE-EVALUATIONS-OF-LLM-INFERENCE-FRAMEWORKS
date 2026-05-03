@@ -1,39 +1,43 @@
 # =============================================================================
-# PostgreSQL StatefulSet for Langfuse (separate from agent checkpointer)
+# MinIO StatefulSet + Service for Langfuse v4
+# S3-compatible object storage for events, media, and batch exports.
 # =============================================================================
 apiVersion: v1
 kind: Service
 metadata:
-  name: langfuse-postgres
+  name: langfuse-minio
   namespace: langfuse
   labels:
-    app: langfuse-postgres
+    app: langfuse-minio
 spec:
   type: ClusterIP
   selector:
-    app: langfuse-postgres
+    app: langfuse-minio
   ports:
-    - name: postgres
-      port: 5432
-      targetPort: 5432
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: langfuse-postgres
+  name: langfuse-minio
   namespace: langfuse
   labels:
-    app: langfuse-postgres
+    app: langfuse-minio
 spec:
-  serviceName: langfuse-postgres
+  serviceName: langfuse-minio
   replicas: 1
   selector:
     matchLabels:
-      app: langfuse-postgres
+      app: langfuse-minio
   template:
     metadata:
       labels:
-        app: langfuse-postgres
+        app: langfuse-minio
     spec:
       affinity:
         nodeAffinity:
@@ -47,23 +51,22 @@ spec:
                       - gpu-pool
 
       containers:
-        - name: postgres
-          image: postgres:16-alpine
+        - name: minio
+          image: minio/minio:latest
+          command:
+            - sh
+            - -c
+            - mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data
           ports:
-            - containerPort: 5432
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
           env:
-            - name: POSTGRES_DB
-              value: langfuse
-            - name: POSTGRES_USER
-              value: langfuse
-            - name: POSTGRES_PASSWORD
-              value: langfuse
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
-            - name: TZ
-              value: "UTC"
-            - name: PGTZ
-              value: "UTC"
+            - name: MINIO_ROOT_USER
+              value: minio
+            - name: MINIO_ROOT_PASSWORD
+              value: miniosecret
           resources:
             requests:
               cpu: "250m"
@@ -72,33 +75,25 @@ spec:
               cpu: "500m"
               memory: "512Mi"
           volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
+            - name: minio-data
+              mountPath: /data
           readinessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - langfuse
-                - -d
-                - langfuse
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - langfuse
-                - -d
-                - langfuse
+            httpGet:
+              path: /minio/health/live
+              port: 9000
             initialDelaySeconds: 30
             periodSeconds: 30
   volumeClaimTemplates:
     - metadata:
-        name: postgres-data
+        name: minio-data
       spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 1Gi
+            storage: 5Gi
