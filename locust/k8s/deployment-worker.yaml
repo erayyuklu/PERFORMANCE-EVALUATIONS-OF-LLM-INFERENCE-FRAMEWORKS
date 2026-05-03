@@ -8,6 +8,8 @@ metadata:
     role: worker
 spec:
   replicas: 2   # increase for higher concurrency headroom
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: locust
