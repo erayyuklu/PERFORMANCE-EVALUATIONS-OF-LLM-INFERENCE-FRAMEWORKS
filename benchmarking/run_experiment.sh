@@ -540,6 +540,20 @@ run_locust() {
   curl -sf -X GET "${LOCUST_MASTER_URL}/stop" > /dev/null \
     || { echo "ERROR: Failed to stop Locust swarm (GET /stop)." >&2; exit 1; }
 
+  local waited=0
+  local state="unknown"
+  while (( waited < ${LOCUST_STOP_WAIT_SEC:-300} )); do
+    state=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
+      | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
+    if [[ "${state}" == "stopped" || "${state}" == "ready" ]]; then
+      info "Swarm has stopped (state: ${state})."
+      break
+    fi
+    info "Waiting for swarm to stop (state: ${state}, elapsed: ${waited}s)..."
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+
   # Record end timestamp
   local end_ts
   end_ts=$(date +%s)
@@ -603,24 +617,32 @@ run_locust() {
       tmp_jsonl="${pod}_responses.jsonl"
 
       # Custom metrics CSV — first worker becomes the file, rest are appended (no header)
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/${custom_metrics_src}" "${tmp_csv}"; then
-        if [[ "${first_worker}" == "true" ]]; then
-          mv "${tmp_csv}" "${out_metrics_file}"
-          first_worker=false
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/${custom_metrics_src}" "${tmp_csv}" 2>/dev/null; then
+        if [[ -f "${tmp_csv}" ]]; then
+          if [[ "${first_worker}" == "true" ]]; then
+            mv "${tmp_csv}" "${out_metrics_file}"
+            first_worker=false
+          else
+            tail -n +2 "${tmp_csv}" >> "${out_metrics_file}"
+            rm -f "${tmp_csv}"
+          fi
+          info "Custom metrics copied from ${pod}."
         else
-          tail -n +2 "${tmp_csv}" >> "${out_metrics_file}"
-          rm -f "${tmp_csv}"
+          info "No custom metrics generated on ${pod}."
         fi
-        info "Custom metrics copied from ${pod}."
       else
         info "WARNING: Could not fetch custom metrics from ${pod}."
       fi
 
       # Prompt/response JSONL — simply concatenate
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/${responses_src}" "${tmp_jsonl}"; then
-        cat "${tmp_jsonl}" >> "${out_responses_file}"
-        rm -f "${tmp_jsonl}"
-        info "Prompt/response log copied from ${pod}."
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/${responses_src}" "${tmp_jsonl}" 2>/dev/null; then
+        if [[ -f "${tmp_jsonl}" ]]; then
+          cat "${tmp_jsonl}" >> "${out_responses_file}"
+          rm -f "${tmp_jsonl}"
+          info "Prompt/response log copied from ${pod}."
+        else
+          info "No prompt/response log generated on ${pod}."
+        fi
       else
         info "WARNING: Could not fetch prompt/response log from ${pod}."
       fi

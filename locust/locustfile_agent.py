@@ -27,10 +27,13 @@ import random
 import time
 from pathlib import Path
 
-from locust import HttpUser, constant, events, task
+from locust import HttpUser, constant, events, task, runners
 from locust.runners import MasterRunner, WorkerRunner
 import logging
 import sys
+
+runners.MASTER_HEARTBEAT_TIMEOUT = 300
+runners.HEARTBEAT_LIVENESS = 30
 
 # Configure logging
 logging.basicConfig(

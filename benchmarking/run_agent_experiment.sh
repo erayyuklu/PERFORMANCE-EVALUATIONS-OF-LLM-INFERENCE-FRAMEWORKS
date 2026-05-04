@@ -285,6 +285,21 @@ run_agent_locust() {
   info "Stopping swarm..."
   curl -sf -X GET "${LOCUST_MASTER_URL}/stop" > /dev/null || true
 
+  info "Waiting for swarm to stop and requests to drain..."
+  local waited=0
+  local state="unknown"
+  while (( waited < ${LOCUST_STOP_WAIT_SEC:-300} )); do
+    state=$(curl -sf "${LOCUST_MASTER_URL}/stats/requests" 2>/dev/null \
+      | jq -r '.state // "unknown"' 2>/dev/null || echo "unknown")
+    if [[ "${state}" == "stopped" || "${state}" == "ready" ]]; then
+      info "Swarm has stopped (state: ${state})."
+      break
+    fi
+    info "Waiting for swarm to stop (state: ${state}, elapsed: ${waited}s)..."
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+
   local end_ts
   end_ts=$(date +%s)
 
@@ -314,24 +329,32 @@ run_agent_locust() {
       tmp_jsonl="${pod}_agent_responses.jsonl"
 
       # Agent metrics CSV — first worker becomes the file, rest are appended (no header)
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_metrics.csv" "${tmp_csv}"; then
-        if [[ "${first_worker}" == "true" ]]; then
-          mv "${tmp_csv}" "${out_csv}_agent_metrics.csv"
-          first_worker=false
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_metrics.csv" "${tmp_csv}" 2>/dev/null; then
+        if [[ -f "${tmp_csv}" ]]; then
+          if [[ "${first_worker}" == "true" ]]; then
+            mv "${tmp_csv}" "${out_csv}_agent_metrics.csv"
+            first_worker=false
+          else
+            tail -n +2 "${tmp_csv}" >> "${out_csv}_agent_metrics.csv"
+            rm -f "${tmp_csv}"
+          fi
+          info "Agent metrics copied from ${pod}."
         else
-          tail -n +2 "${tmp_csv}" >> "${out_csv}_agent_metrics.csv"
-          rm -f "${tmp_csv}"
+          info "No agent metrics generated on ${pod}."
         fi
-        info "Agent metrics copied from ${pod}."
       else
         info "WARNING: Could not fetch agent metrics from ${pod}."
       fi
 
       # Agent responses JSONL — simply concatenate
-      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_responses.jsonl" "${tmp_jsonl}"; then
-        cat "${tmp_jsonl}" >> "${out_csv}_agent_responses.jsonl"
-        rm -f "${tmp_jsonl}"
-        info "Agent responses copied from ${pod}."
+      if kubectl cp -n "${LOCUST_NAMESPACE}" "${pod}:${WORKER_ARTIFACTS_DIR}/locust_agent_responses.jsonl" "${tmp_jsonl}" 2>/dev/null; then
+        if [[ -f "${tmp_jsonl}" ]]; then
+          cat "${tmp_jsonl}" >> "${out_csv}_agent_responses.jsonl"
+          rm -f "${tmp_jsonl}"
+          info "Agent responses copied from ${pod}."
+        else
+          info "No agent responses generated on ${pod}."
+        fi
       else
         info "WARNING: Could not fetch agent responses from ${pod}."
       fi
