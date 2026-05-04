@@ -126,6 +126,11 @@ def _on_test_start(environment, **kwargs):
 @events.init.add_listener
 def _on_locust_init(environment, **kwargs):
     """Start Prometheus /metrics server on the master (or standalone) process."""
+    # Ensure modern Locust (2.x) respects the heartbeat liveness setting
+    if environment.runner:
+        environment.runner.master_heartbeat_timeout = 300
+        environment.runner.heartbeat_liveness = 60
+
     if isinstance(environment.runner, WorkerRunner):
         return
     if not _HAS_PROM_CLIENT:

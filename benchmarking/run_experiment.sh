@@ -205,7 +205,7 @@ wait_for_locust_workers() {
       return 0
     fi
     info "Waiting for Locust workers (${worker_count}/${expected_count} connected, attempt ${attempt}/${max_attempts})..."
-    sleep 2
+    sleep 5
   done
 
   echo "ERROR: Only ${worker_count:-0}/${expected_count} Locust workers connected after wait period." >&2
@@ -347,28 +347,32 @@ ensure_locust_ready() {
       info "Locust patched for agent mode."
     fi
   else
-    log "Setting Locust ready for normal benchmark..."
+    if [[ "${SKIP_PATCH}" == "true" ]]; then
+      log "Skipping Locust patch for normal mode; using current Locust config."
+    else
+      log "Setting Locust ready for normal benchmark..."
 
-    # Restore ConfigMap
-    kubectl patch configmap locust-config -n "${LOCUST_NAMESPACE}" -p \
-      "{\"data\":{\"VLLM_TARGET_HOST\":\"http://vllm-service.vllm.svc.cluster.local\"}}"
+      # Restore ConfigMap
+      kubectl patch configmap locust-config -n "${LOCUST_NAMESPACE}" -p \
+        "{\"data\":{\"VLLM_TARGET_HOST\":\"http://vllm-service.vllm.svc.cluster.local\"}}"
 
-    # Restore master deployment to original locustfile
-    kubectl patch deployment locust-master -n "${LOCUST_NAMESPACE}" --type=json -p \
-      "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--master\",\"-f\",\"/locust/locustfile.py\",\"--stop-timeout\",\"${LOCUST_STOP_WAIT_SEC:-300}\",\"--csv=/tmp/locust\",\"--csv-full-history\"]}]"
+      # Restore master deployment to original locustfile
+      kubectl patch deployment locust-master -n "${LOCUST_NAMESPACE}" --type=json -p \
+        "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--master\",\"-f\",\"/locust/locustfile.py\",\"--stop-timeout\",\"${LOCUST_STOP_WAIT_SEC:-300}\",\"--csv=/tmp/locust\",\"--csv-full-history\"]}]"
 
-    # Restore worker deployment
-    kubectl patch deployment locust-worker -n "${LOCUST_NAMESPACE}" --type=json -p \
-      "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--worker\",\"--master-host=locust-master\",\"-f\",\"/locust/locustfile.py\"]}]"
+      # Restore worker deployment
+      kubectl patch deployment locust-worker -n "${LOCUST_NAMESPACE}" --type=json -p \
+        "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/args\",\"value\":[\"--worker\",\"--master-host=locust-master\",\"-f\",\"/locust/locustfile.py\"]}]"
 
-    # Restart
-    kubectl rollout restart deployment/locust-master -n "${LOCUST_NAMESPACE}"
-    wait_for_deployment "locust-master" "${LOCUST_NAMESPACE}"
-    sleep 10
-    kubectl rollout restart deployment/locust-worker -n "${LOCUST_NAMESPACE}"
-    wait_for_deployment "locust-worker" "${LOCUST_NAMESPACE}"
+      # Restart
+      kubectl rollout restart deployment/locust-master -n "${LOCUST_NAMESPACE}"
+      wait_for_deployment "locust-master" "${LOCUST_NAMESPACE}"
+      sleep 10
+      kubectl rollout restart deployment/locust-worker -n "${LOCUST_NAMESPACE}"
+      wait_for_deployment "locust-worker" "${LOCUST_NAMESPACE}"
 
-    info "Locust restored to vLLM mode."
+      info "Locust restored to vLLM mode."
+    fi
   fi
 
   log "Waiting for Locust pods to be ready..."
@@ -434,7 +438,7 @@ wait_for_swarm_running() {
       return 0
     fi
     info "Waiting for swarm to reach 'running' state (current: ${state}, attempt ${attempt}/${attempts})..."
-    sleep 2
+    sleep 5
   done
   echo "ERROR: Locust swarm did not reach 'running' state within ${timeout_sec}s." >&2
   exit 1
