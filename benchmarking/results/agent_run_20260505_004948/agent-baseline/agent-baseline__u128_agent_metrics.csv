@@ -1,0 +1,351 @@
+timestamp,task,e2e_ms,server_duration_ms,steps,tool_calls,success,error_type
+19630.341528,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,25083.36,25079.93,5,2,True,
+19617.209633035,What is the weather like in Tokyo right now? Should I pack warm clothes?,41326.14,41310.27,4,1,True,
+19618.155392604,What is the weather like in Tokyo right now? Should I pack warm clothes?,43757.71,43754.15,4,1,True,
+19621.911870402,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,41122.73,41119.21,5,2,True,
+19624.74366031,What is the weather like in Tokyo right now? Should I pack warm clothes?,42380.45,42376.79,4,1,True,
+19634.122490547,What is the weather like in Tokyo right now? Should I pack warm clothes?,37317.31,37313.53,4,1,True,
+19626.585523751,What is the weather like in Tokyo right now? Should I pack warm clothes?,52294.59,52290.8,4,1,True,
+19622.835339783,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",57813.37,57808.26,5,2,True,
+19642.542458337,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,38478.01,38474.31,5,2,True,
+19620.019883404,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",61100.19,61096.34,4,1,True,
+19620.970563303,What is the weather like in Tokyo right now? Should I pack warm clothes?,62133.88,62130.17,4,1,True,
+19629.400561071,What is the weather like in Tokyo right now? Should I pack warm clothes?,53889.03,53885.06,4,1,True,
+19645.390487853,Search Wikipedia for artificial intelligence and explain it in simple terms.,46607.21,46602.5,4,1,True,
+19643.489991896,What is the weather like in Tokyo right now? Should I pack warm clothes?,51790.25,51786.33,4,1,True,
+19639.739679726,Look up financial data for AAPL stock and write a brief investment summary.,55541.55,55534.79,4,1,True,
+19623.773749623,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",73258.14,73254.74,5,2,True,
+19664.117605396,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,33426.79,33422.97,5,2,True,
+19648.165463554,Get the current weather in London and tell me if I should bring an umbrella.,50113.09,50109.68,4,1,True,
+19636.918403098,Get the current weather in London and tell me if I should bring an umbrella.,61843.32,61840.01,4,1,True,
+19655.424941357,Look up financial data for AAPL stock and write a brief investment summary.,48372.11,48370.08,4,1,True,
+19654.73820269,Get the current weather in London and tell me if I should bring an umbrella.,53703.07,53699.63,4,1,True,
+19644.412530336,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,64831.57,64827.46,5,2,True,
+19661.309958447,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,48032.03,48028.4,5,2,True,
+19619.082199424,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",91607.43,91603.64,6,3,True,
+19663.034647605,Look up financial data for AAPL stock and write a brief investment summary.,53921.43,53919.36,4,1,True,
+19633.165079199,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",90200.05,90196.45,4,1,True,
+19625.654466531,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",100685.96,100682.31,5,2,True,
+19658.535819086,What is the weather like in Tokyo right now? Should I pack warm clothes?,70681.7,70679.61,4,1,True,
+19638.784378958,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",91290.05,91286.23,4,1,True,
+19641.608173976,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",93594.11,93590.71,5,2,True,
+19670.704334302,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,70005.23,70000.92,4,1,True,
+19671.619726103,Look up financial data for AAPL stock and write a brief investment summary.,71950.09,71945.97,4,1,True,
+19632.21919213,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",113960.88,113957.36,6,3,True,
+19627.530554091,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120005.14,0,0,0,False,http_0
+19628.48322891,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120004.27,0,0,0,False,http_0
+19668.806086205,Get the current weather in London and tell me if I should bring an umbrella.,80595.7,80591.94,4,1,True,
+19657.551156539,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",93264.48,93260.93,5,2,True,
+19631.304128308,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120003.61,0,0,0,False,http_0
+19649.132349822,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",102875.31,102871.65,5,2,True,
+19651.947734951,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,100950.03,100946.26,5,2,True,
+19681.020516029,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",73193.16,73191.09,5,2,True,
+19666.931991155,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,87390.26,87385.55,4,1,True,
+19635.030352449,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.99,0,0,0,False,http_0
+19635.999032837,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120003.46,0,0,0,False,http_0
+19637.848527048,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.43,0,0,0,False,http_0
+19646.300935344,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,111882.44,111876.73,4,1,True,
+19640.658038648,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.86,0,0,0,False,http_0
+19652.856432191,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",107981.42,107977.71,5,2,True,
+19667.869178465,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",94210.87,94204.25,4,1,True,
+19656.620577159,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",109284.64,109280.25,4,1,True,
+19647.233461454,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120015.67,0,0,0,False,http_0
+19674.443841601,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,93166.38,93162.23,5,2,True,
+19650.998843682,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",118970.32,118963.48,5,2,True,
+19650.049078583,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.76,0,0,0,False,http_0
+19653.82175123,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120003.66,0,0,0,False,http_0
+19675.37992473,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,98643.63,98639.76,4,1,True,
+19655.718671188,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",118648.05,118643.92,7,3,True,
+19659.426637549,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",114940.97,114936.53,6,3,True,
+19695.280278802,Look up financial data for AAPL stock and write a brief investment summary.,80632.88,80630.27,4,1,True,
+19658.492813519,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.32,0,0,0,False,http_0
+19703.797106967,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,74768.35,74766.36,5,2,True,
+19660.378702827,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120002.72,0,0,0,False,http_0
+19661.913153848,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.4,0,0,0,False,http_0
+19662.240105497,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120003.82,0,0,0,False,http_0
+19663.176196976,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120003.28,0,0,0,False,http_0
+19746.180112411,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,37940.95,37938.85,5,2,True,
+19665.061175275,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120003.27,0,0,0,False,http_0
+19666.055063851,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120012.44,0,0,0,False,http_0
+19667.124157193,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.36,0,0,0,False,http_0
+19669.756840543,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120007.26,0,0,0,False,http_0
+19671.439847534,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120002.54,0,0,0,False,http_0
+19672.572937201,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.52,0,0,0,False,http_0
+19673.52359906,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120004.96,0,0,0,False,http_0
+19752.007712087,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,42746.07,42736.31,5,2,True,
+19691.997740613,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,103546.09,103543.86,5,2,True,
+19676.32868704,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.15,0,0,0,False,http_0
+19678.880162346,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",120002.38,0,0,0,False,http_0
+19683.104484425,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",116601.08,116599.03,5,2,True,
+19708.441315768,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",92065.37,92063.29,5,2,True,
+19680.648760243,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.39,0,0,0,False,http_0
+19681.120133522,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.37,0,0,0,False,http_0
+19683.289625183,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",120002.01,0,0,0,False,http_0
+19730.074484467,What is the weather like in Tokyo right now? Should I pack warm clothes?,82336.25,82333.98,4,1,True,
+19695.281668282,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120002.27,0,0,0,False,http_0
+19752.8978262,What is the weather like in Tokyo right now? Should I pack warm clothes?,63139.79,63137.53,4,1,True,
+19767.249186214,Get the current weather in London and tell me if I should bring an umbrella.,48906.01,48889.05,4,1,True,
+19697.03193547,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.41,0,0,0,False,http_0
+19697.544437057,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120002.21,0,0,0,False,http_0
+19698.27859446,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120001.93,0,0,0,False,http_0
+19698.761773829,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120002.35,0,0,0,False,http_0
+19735.202332247,Get the current weather in London and tell me if I should bring an umbrella.,83973.77,83971.77,4,1,True,
+19729.217566311,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,97070.77,97068.56,4,1,True,
+19709.244136597,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.57,0,0,0,False,http_0
+19709.342046111,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120001.63,0,0,0,False,http_0
+19716.95612383,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",113199.77,113197.74,5,2,True,
+19740.709606744,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,89447.25,89444.98,4,1,True,
+19710.689673834,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120001.89,0,0,0,False,http_0
+19760.837888947,Look up financial data for AAPL stock and write a brief investment summary.,71414.8,71412.69,4,1,True,
+19756.0025459,Get the current weather in London and tell me if I should bring an umbrella.,78598.79,78595.24,4,1,True,
+19769.969215608,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,70332.02,70315.67,5,2,True,
+19723.365168358,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120001.63,0,0,0,False,http_0
+19726.340474627,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120002.27,0,0,0,False,http_0
+19781.91563103,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,69375.87,69372.44,5,2,True,
+19748.487547803,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",103866.04,103862.87,5,2,True,
+19767.610276311,What is the weather like in Tokyo right now? Should I pack warm clothes?,89462.11,89459.54,4,1,True,
+19780.381471458,Search Wikipedia for artificial intelligence and explain it in simple terms.,81257.32,81252.5,4,1,True,
+19803.291694614,What is the weather like in Tokyo right now? Should I pack warm clothes?,58569.24,58562.02,4,1,True,
+19743.569873589,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120002.26,0,0,0,False,http_0
+19782.243973169,Search Wikipedia for artificial intelligence and explain it in simple terms.,83144.22,83140.7,4,1,True,
+19747.535754864,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120008.1,0,0,0,False,http_0
+19816.155244697,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,51724.37,51708.8,5,2,True,
+19778.565518585,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,89747.07,89744.74,5,2,True,
+19778.496190759,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,89817.26,89762.67,5,2,True,
+19749.401837764,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.39,0,0,0,False,http_0
+19750.815680214,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120001.82,0,0,0,False,http_0
+19751.307786882,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.21,0,0,0,False,http_0
+19800.506723083,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,71911.11,71909.14,5,2,True,
+19754.213725195,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,118314.49,118312.37,4,1,True,
+19754.322296578,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120002.15,0,0,0,False,http_0
+19755.034390152,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120005.5,0,0,0,False,http_0
+19757.85204499,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120003.4,0,0,0,False,http_0
+19758.183420498,Search Wikipedia for artificial intelligence and explain it in simple terms.,120002.14,0,0,0,False,http_0
+19774.023597778,Look up financial data for AAPL stock and write a brief investment summary.,105706.29,105704.22,4,1,True,
+19760.661965118,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120005.21,0,0,0,False,http_0
+19762.080100987,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.53,0,0,0,False,http_0
+19818.28060578,Get the current weather in London and tell me if I should bring an umbrella.,64451.0,64447.11,4,1,True,
+19786.067558272,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",97325.43,97320.9,5,2,True,
+19765.905258821,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120001.99,0,0,0,False,http_0
+19799.705603204,What is the weather like in Tokyo right now? Should I pack warm clothes?,89262.43,89260.17,4,1,True,
+19796.331891131,Search Wikipedia for artificial intelligence and explain it in simple terms.,92636.78,92632.31,4,1,True,
+19794.753827423,Look up financial data for AAPL stock and write a brief investment summary.,94912.91,94910.55,4,1,True,
+19815.283987403,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,74494.31,74490.1,5,2,True,
+19770.052910303,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.22,0,0,0,False,http_0
+19773.825453341,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.96,0,0,0,False,http_0
+19774.366763456,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120001.72,0,0,0,False,http_0
+19774.367999485,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120001.9,0,0,0,False,http_0
+19812.410787788,Search Wikipedia for artificial intelligence and explain it in simple terms.,82107.31,82105.05,4,1,True,
+19775.913199896,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120002.41,0,0,0,False,http_0
+19783.179529969,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120002.91,0,0,0,False,http_0
+19784.121110548,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.04,0,0,0,False,http_0
+19785.064495388,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120004.02,0,0,0,False,http_0
+19801.122557083,Search Wikipedia for artificial intelligence and explain it in simple terms.,104123.92,104120.71,4,1,True,
+19787.126568775,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.86,0,0,0,False,http_0
+19789.764152495,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.42,0,0,0,False,http_0
+19791.442444757,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120005.34,0,0,0,False,http_0
+19792.576509053,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120003.37,0,0,0,False,http_0
+19793.528623162,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.15,0,0,0,False,http_0
+19795.543880162,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120001.95,0,0,0,False,http_0
+19834.601391858,What is the weather like in Tokyo right now? Should I pack warm clothes?,82237.24,82228.78,4,1,True,
+19830.155950034,Look up financial data for AAPL stock and write a brief investment summary.,87423.54,87419.64,4,1,True,
+19798.882607207,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",120017.6,0,0,0,False,http_0
+19800.651200593,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120003.14,0,0,0,False,http_0
+19832.252741109,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,94141.15,94138.31,4,1,True,
+19843.366856043,Search Wikipedia for artificial intelligence and explain it in simple terms.,84035.28,84030.34,4,1,True,
+19816.037662004,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120001.86,0,0,0,False,http_0
+19817.03440221,Search Wikipedia for artificial intelligence and explain it in simple terms.,120004.95,0,0,0,False,http_0
+19817.546695127,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.08,0,0,0,False,http_0
+19818.764174678,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120004.79,0,0,0,False,http_0
+19819.176146351,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.01,0,0,0,False,http_0
+19826.288377432,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.16,0,0,0,False,http_0
+19829.246759312,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120016.9,0,0,0,False,http_0
+19829.343728786,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120003.55,0,0,0,False,http_0
+19830.157223564,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.74,0,0,0,False,http_0
+19830.69161884,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120005.51,0,0,0,False,http_0
+19840.3013138,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120002.84,0,0,0,False,http_0
+19846.342809781,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120004.35,0,0,0,False,http_0
+19851.291546612,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120001.63,0,0,0,False,http_0
+19852.353629543,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.54,0,0,0,False,http_0
+19857.07244572,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120003.07,0,0,0,False,http_0
+19861.638837866,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120002.22,0,0,0,False,http_0
+19625.657953531,What is the weather like in Tokyo right now? Should I pack warm clothes?,31785.64,31781.82,4,1,True,
+19637.850535158,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,25508.17,25504.52,5,2,True,
+19626.585536121,Look up financial data for AAPL stock and write a brief investment summary.,43457.87,43454.14,4,1,True,
+19623.772558683,Get the current weather in London and tell me if I should bring an umbrella.,46691.98,46688.37,4,1,True,
+19640.676811386,Get the current weather in London and tell me if I should bring an umbrella.,30215.98,30211.81,4,1,True,
+19632.21747138,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,39995.13,39991.07,4,1,True,
+19618.153830234,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",60816.59,60812.66,5,2,True,
+19628.48362568,What is the weather like in Tokyo right now? Should I pack warm clothes?,55175.65,55171.36,4,1,True,
+19627.527900321,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,59130.16,59126.85,5,2,True,
+19621.909953132,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",64846.42,64843.0,2,0,True,
+19633.165608508,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,55109.95,55106.38,4,1,True,
+19629.402417091,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,59687.3,59683.62,4,1,True,
+19659.430252599,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,31795.29,31791.86,5,2,True,
+19631.295289189,Get the current weather in London and tell me if I should bring an umbrella.,63378.08,63374.46,4,1,True,
+19643.474186697,Look up financial data for AAPL stock and write a brief investment summary.,60922.91,60919.3,4,1,True,
+19648.165544714,Look up financial data for AAPL stock and write a brief investment summary.,58243.61,58240.22,4,1,True,
+19622.835054923,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",84862.35,84857.03,6,3,True,
+19642.541526927,Look up financial data for AAPL stock and write a brief investment summary.,65796.3,65792.58,4,1,True,
+19644.427606285,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,64816.45,64813.3,5,2,True,
+19652.856964321,Search Wikipedia for artificial intelligence and explain it in simple terms.,60848.47,60845.01,4,1,True,
+19619.083437904,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",97257.0,97253.16,5,2,True,
+19620.973477733,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",96085.18,96081.57,5,2,True,
+19660.382858257,Look up financial data for AAPL stock and write a brief investment summary.,57955.44,57951.75,4,1,True,
+19624.757033679,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",95943.47,95940.29,5,2,True,
+19634.102881398,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",87113.53,87108.18,4,1,True,
+19669.745960053,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,53510.94,53507.24,5,2,True,
+19658.492674269,What is the weather like in Tokyo right now? Should I pack warm clothes?,67325.65,67321.89,4,1,True,
+19635.993798037,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",93328.08,93324.65,5,2,True,
+19636.915429028,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",93056.64,93052.96,5,2,True,
+19666.930497455,Search Wikipedia for artificial intelligence and explain it in simple terms.,63504.61,63500.7,4,1,True,
+19665.057441385,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,66480.53,66476.77,4,1,True,
+19638.789741887,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,93062.63,93059.07,4,1,True,
+19630.33839339,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",106128.74,106125.14,5,2,True,
+19668.807525145,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,68267.89,68264.13,4,1,True,
+19617.209633685,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120015.48,0,0,0,False,http_0
+19674.445756791,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,65023.63,65020.2,4,1,True,
+19620.020484844,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.76,0,0,0,False,http_0
+19672.577830251,Look up financial data for AAPL stock and write a brief investment summary.,69232.06,69228.38,4,1,True,
+19678.970462011,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,65753.11,65750.96,4,1,True,
+19645.390109223,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",99752.05,99746.76,5,2,True,
+19651.945326611,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,93771.7,93767.64,5,2,True,
+19686.75641094,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,59208.26,59206.14,5,2,True,
+19667.871718355,Look up financial data for AAPL stock and write a brief investment summary.,80767.15,80763.52,4,1,True,
+19662.238437897,Look up financial data for AAPL stock and write a brief investment summary.,86621.05,86615.85,4,1,True,
+19670.892855879,Look up financial data for AAPL stock and write a brief investment summary.,78618.07,78615.68,4,1,True,
+19675.381970561,Look up financial data for AAPL stock and write a brief investment summary.,75320.1,75316.29,4,1,True,
+19671.624066332,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,79191.59,79187.74,4,1,True,
+19683.659328219,Look up financial data for AAPL stock and write a brief investment summary.,69778.74,69776.82,4,1,True,
+19654.74094783,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",98908.23,98904.87,4,1,True,
+19635.046728338,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120003.68,0,0,0,False,http_0
+19647.232821094,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",108508.8,108492.22,5,2,True,
+19676.32488986,Get the current weather in London and tell me if I should bring an umbrella.,80241.6,80237.38,4,1,True,
+19663.178552446,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",94028.84,94024.68,5,2,True,
+19646.298460634,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,111882.98,111878.96,4,1,True,
+19663.358771565,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",95784.15,95782.09,5,2,True,
+19639.746372206,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.04,0,0,0,False,http_0
+19670.711178391,Look up financial data for AAPL stock and write a brief investment summary.,90126.22,90122.24,4,1,True,
+19641.607054356,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.41,0,0,0,False,http_0
+19673.52358287,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,90101.91,90096.78,4,1,True,
+19655.719596158,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",108611.69,108607.8,5,2,True,
+19709.244092747,What is the weather like in Tokyo right now? Should I pack warm clothes?,57926.75,57924.79,4,1,True,
+19649.132145812,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.92,0,0,0,False,http_0
+19650.044341813,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120004.1,0,0,0,False,http_0
+19651.002852972,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120003.8,0,0,0,False,http_0
+19653.804898311,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120003.71,0,0,0,False,http_0
+19707.697471227,Search Wikipedia for artificial intelligence and explain it in simple terms.,66548.0,66539.63,4,1,True,
+19670.043456004,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",104427.98,104426.1,4,1,True,
+19656.62344045,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120004.08,0,0,0,False,http_0
+19664.121789075,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",112761.57,112758.01,5,2,True,
+19657.443660817,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.06,0,0,0,False,http_0
+19657.549790419,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120003.74,0,0,0,False,http_0
+19721.216452865,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,58898.35,58896.36,5,2,True,
+19661.314965807,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120003.09,0,0,0,False,http_0
+19666.06890858,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120018.5,0,0,0,False,http_0
+19706.409193919,What is the weather like in Tokyo right now? Should I pack warm clothes?,83858.49,83856.29,4,1,True,
+19670.464588698,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120001.62,0,0,0,False,http_0
+19672.212643784,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.63,0,0,0,False,http_0
+19755.741664716,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,41944.29,41942.18,5,2,True,
+19725.818374091,Look up financial data for AAPL stock and write a brief investment summary.,75459.28,75457.37,4,1,True,
+19716.340491879,Look up financial data for AAPL stock and write a brief investment summary.,87234.43,87232.12,4,1,True,
+19748.638936393,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,56221.48,56219.51,5,2,True,
+19720.700546859,Get the current weather in London and tell me if I should bring an umbrella.,84944.49,84942.57,4,1,True,
+19739.469427984,Get the current weather in London and tell me if I should bring an umbrella.,67148.66,67146.63,4,1,True,
+19686.658106376,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120001.34,0,0,0,False,http_0
+19688.275606672,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120002.62,0,0,0,False,http_0
+19689.08975628,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120002.76,0,0,0,False,http_0
+19723.256954305,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,85971.42,85969.41,4,1,True,
+19691.225578072,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120001.96,0,0,0,False,http_0
+19737.225169548,Look up financial data for AAPL stock and write a brief investment summary.,75298.54,75280.21,4,1,True,
+19694.673444631,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120001.96,0,0,0,False,http_0
+19750.702116361,Get the current weather in London and tell me if I should bring an umbrella.,66773.68,66771.15,4,1,True,
+19755.05045631,Search Wikipedia for artificial intelligence and explain it in simple terms.,63036.1,63032.76,4,1,True,
+19704.397137759,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.16,0,0,0,False,http_0
+19740.024300817,What is the weather like in Tokyo right now? Should I pack warm clothes?,87133.6,87130.25,4,1,True,
+19737.075473327,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,91129.41,91127.32,4,1,True,
+19708.337867715,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120001.54,0,0,0,False,http_0
+19730.435155923,What is the weather like in Tokyo right now? Should I pack warm clothes?,100316.6,100314.36,4,1,True,
+19731.852417582,Look up financial data for AAPL stock and write a brief investment summary.,100400.31,100398.3,4,1,True,
+19718.338354661,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,114586.7,114584.38,5,2,True,
+19713.70547553,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120002.05,0,0,0,False,http_0
+19717.058723423,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",117151.12,117148.6,5,2,True,
+19759.142968196,Get the current weather in London and tell me if I should bring an umbrella.,79416.31,79414.29,4,1,True,
+19767.170884179,Search Wikipedia for artificial intelligence and explain it in simple terms.,72780.2,72778.16,4,1,True,
+19770.048491993,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,70252.74,70249.13,5,2,True,
+19759.749456717,Look up financial data for AAPL stock and write a brief investment summary.,81040.01,81036.79,4,1,True,
+19731.538044102,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",109704.89,109702.93,5,2,True,
+19760.837449527,Look up financial data for AAPL stock and write a brief investment summary.,87045.21,87042.74,4,1,True,
+19729.321922284,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.43,0,0,0,False,http_0
+19729.972112833,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120005.07,0,0,0,False,http_0
+19763.625536028,Look up financial data for AAPL stock and write a brief investment summary.,87558.94,87556.99,4,1,True,
+19757.207435531,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,97643.78,97641.7,4,1,True,
+19748.859529589,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,107094.98,107092.92,4,1,True,
+19736.467186697,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,120001.81,0,0,0,False,http_0
+19780.114843075,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,80709.66,80707.51,5,2,True,
+19790.267726692,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,71117.6,71115.54,5,2,True,
+19811.227595793,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,50158.64,50153.71,5,2,True,
+19741.809943473,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120001.74,0,0,0,False,http_0
+19744.723620785,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120002.47,0,0,0,False,http_0
+19745.142210818,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120001.93,0,0,0,False,http_0
+19745.717097131,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120002.38,0,0,0,False,http_0
+19745.964715015,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120001.6,0,0,0,False,http_0
+19750.815696163,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",115575.01,115572.78,5,2,True,
+19749.510980037,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",119502.68,119500.57,5,2,True,
+19753.438128515,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",120002.09,0,0,0,False,http_0
+19753.649224221,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120001.74,0,0,0,False,http_0
+19756.566549123,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.54,0,0,0,False,http_0
+19758.181510299,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120002.94,0,0,0,False,http_0
+19781.318102798,Look up financial data for AAPL stock and write a brief investment summary.,96949.59,96946.44,4,1,True,
+19771.006710521,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",109308.65,109304.62,4,1,True,
+19774.471477049,Look up financial data for AAPL stock and write a brief investment summary.,105951.85,105949.85,4,1,True,
+19761.610507167,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.38,0,0,0,False,http_0
+19764.331328102,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120002.65,0,0,0,False,http_0
+19806.61814106,Get the current weather in London and tell me if I should bring an umbrella.,78256.16,78253.99,4,1,True,
+19832.252774619,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,53290.64,53288.53,5,2,True,
+19777.55358447,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",109463.05,109459.61,4,1,True,
+19769.136118592,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",120002.97,0,0,0,False,http_0
+19797.686032604,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,95004.32,95001.98,4,1,True,
+19773.808659692,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120004.83,0,0,0,False,http_0
+19774.245517553,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.0,0,0,0,False,http_0
+19776.62759405,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120005.22,0,0,0,False,http_0
+19776.883399723,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120002.19,0,0,0,False,http_0
+19777.445789277,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.04,0,0,0,False,http_0
+19786.087449511,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120003.27,0,0,0,False,http_0
+19790.466258269,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,117024.49,117021.0,4,1,True,
+19804.860456973,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,102732.79,102730.86,4,1,True,
+19806.659488257,Search Wikipedia for artificial intelligence and explain it in simple terms.,102211.98,102205.79,4,1,True,
+19792.215334317,"Look up AAPL financial data. If I invested $5000 at the current price, calculate how many shares I c",120009.06,0,0,0,False,http_0
+19855.954567453,Get the current weather in London and compare it to Istanbul. Which city is warmer today?,59441.36,59439.08,5,2,True,
+19828.3394585,Get the current weather in London and tell me if I should bring an umbrella.,87568.19,87564.83,4,1,True,
+19814.675482192,Look up financial data for AAPL stock and write a brief investment summary.,103363.32,103358.31,4,1,True,
+19801.277697383,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120001.75,0,0,0,False,http_0
+19817.475858491,Look up financial data for AAPL stock and write a brief investment summary.,105356.05,105353.24,4,1,True,
+19803.574980305,Get the current weather in London and tell me if I should bring an umbrella.,120001.77,0,0,0,False,http_0
+19805.645093412,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",120002.33,0,0,0,False,http_0
+19861.385371333,Get the current weather in London and tell me if I should bring an umbrella.,65812.22,65809.62,4,1,True,
+19808.278281243,"Calculate the compound interest on $10000 at 5% annual rate for 10 years, then search Wikipedia for ",120004.63,0,0,0,False,http_0
+19809.092567671,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120003.99,0,0,0,False,http_0
+19851.184514569,Look up financial data for AAPL stock and write a brief investment summary.,78020.06,78018.03,4,1,True,
+19809.228419173,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120001.69,0,0,0,False,http_0
+19812.52375886,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120001.69,0,0,0,False,http_0
+19818.086600052,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120001.9,0,0,0,False,http_0
+19854.851265414,Get the current weather in London and tell me if I should bring an umbrella.,86949.04,86946.6,4,1,True,
+19828.204924069,"Calculate 15% tip on a $85.50 restaurant bill, then search Wikipedia for tipping customs around the ",113684.66,113682.44,5,2,True,
+19824.399346414,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120006.27,0,0,0,False,http_0
+19827.157940636,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120001.8,0,0,0,False,http_0
+19856.46906653,Search Wikipedia for the history of Istanbul and summarize the key events in 3 bullet points.,94254.72,94249.52,4,1,True,
+19830.751800526,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120001.54,0,0,0,False,http_0
+19832.925108776,"Get the weather in Tokyo, search Wikipedia for Tokyo, and write a short travel advisory.",120002.65,0,0,0,False,http_0
+19833.707574485,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120003.32,0,0,0,False,http_0
+19834.209904133,"Look up GOOGL financial data, calculate the P/E ratio if EPS is $5.80, and summarize the investment ",120002.08,0,0,0,False,http_0
+19839.951130543,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",116449.34,116447.08,6,3,True,
+19838.559330043,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120002.15,0,0,0,False,http_0
+19849.324408718,Search Wikipedia for artificial intelligence and explain it in simple terms.,110760.35,110754.56,4,1,True,
+19847.882725062,Search Wikipedia for artificial intelligence and explain it in simple terms.,112202.58,112199.47,4,1,True,
+19840.301292071,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.82,0,0,0,False,http_0
+19840.789513619,Get financial data for MSFT and compare its P/E ratio to a typical tech stock.,120001.9,0,0,0,False,http_0
+19841.24298425,"Search Wikipedia for the stock market, then get financial data for AAPL and GOOGL. Compare the two c",120001.67,0,0,0,False,http_0
+19849.977243556,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120005.06,0,0,0,False,http_0
+19860.824549179,Get weather data for Istanbul and New York. Calculate the temperature difference in both Celsius and,120002.29,0,0,0,False,http_0
+19861.386571073,Search Wikipedia for compound interest. Then calculate how much $1000 grows in 5 years at 7% compoun,120002.57,0,0,0,False,http_0
