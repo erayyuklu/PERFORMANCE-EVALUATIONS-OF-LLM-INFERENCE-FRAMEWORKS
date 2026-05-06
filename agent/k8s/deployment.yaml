@@ -35,9 +35,15 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+          env:
+            - name: MODE
+              value: "AGENT_MODE"
           envFrom:
             - configMapRef:
                 name: agent-config
+            - secretRef:
+                name: agent-secrets
+                optional: true
           resources:
             requests:
               cpu: "500m"

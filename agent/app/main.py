@@ -19,7 +19,7 @@ import uuid
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage, SystemMessage
 
 from .config import settings
 from .graph import create_agent_graph
@@ -137,9 +137,17 @@ async def run_agent(request: AgentRequest):
     if final_message and isinstance(final_message, AIMessage):
         result_text = final_message.content or ""
 
+    # Extract plan from the planner's SystemMessage if present
+    plan_text = None
+    for m in messages:
+        if isinstance(m, SystemMessage) and "[PLAN FROM PLANNER]" in str(m.content):
+            plan_text = m.content
+            break
+
     return AgentResponse(
         task=request.task,
         result=result_text,
+        plan=plan_text,
         steps=steps,
         tool_calls=tool_calls,
         duration_ms=round(duration_ms, 2),

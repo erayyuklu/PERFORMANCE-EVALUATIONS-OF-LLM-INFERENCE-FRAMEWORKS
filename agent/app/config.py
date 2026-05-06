@@ -8,6 +8,14 @@ import os
 class Settings:
     """Settings loaded from environment variables with sensible defaults."""
 
+    # Architecture Flag
+    MODE: str = os.getenv("MODE", "single-agent").lower()
+
+    # Planner (external API)
+    PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "gemini-2.5-pro")
+    PLANNER_API_KEY: str = os.getenv("PLANNER_API_KEY", "")
+    PLANNER_TEMPERATURE: float = float(os.getenv("PLANNER_TEMPERATURE", "0.0"))
+
     VLLM_MODEL_NAME: str = os.getenv("VLLM_MODEL_NAME", "Qwen/Qwen3-8B")
     VLLM_BASE_URL: str = os.getenv(
         "VLLM_BASE_URL", "http://vllm-service.vllm.svc.cluster.local/v1"
