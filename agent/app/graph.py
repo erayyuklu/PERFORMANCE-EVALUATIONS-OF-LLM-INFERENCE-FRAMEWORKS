@@ -102,8 +102,17 @@ def create_agent_graph(checkpointer=None):
         logger.info("[graph] Single-agent ReAct graph compiled successfully.")
         return graph
 
+    def _executor_prompt(state: MessagesState) -> list:
+        # OpenAI-compatible APIs require SystemMessages to precede HumanMessages.
+        # planner_node appends the plan as a SystemMessage (add_messages reducer),
+        # so we reorder here: system messages first, then the rest.
+        msgs = state["messages"]
+        sys_msgs = [m for m in msgs if isinstance(m, SystemMessage)]
+        other_msgs = [m for m in msgs if not isinstance(m, SystemMessage)]
+        return sys_msgs + other_msgs
+
     # Build the Executor as a prebuilt ReAct sub-agent
-    executor_agent = create_react_agent(executor_llm, tools)
+    executor_agent = create_react_agent(executor_llm, tools, prompt=_executor_prompt)
 
     # Build the outer graph
     workflow = StateGraph(MessagesState)
