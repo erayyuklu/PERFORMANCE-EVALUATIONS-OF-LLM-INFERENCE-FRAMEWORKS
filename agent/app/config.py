@@ -12,7 +12,7 @@ class Settings:
     MODE: str = os.getenv("MODE", "single-agent").lower()
 
     # Planner (external API)
-    PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "gemini-2.5-pro")
+    PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "gemini-3-flash")
     PLANNER_API_KEY: str = os.getenv("PLANNER_API_KEY", "")
     PLANNER_TEMPERATURE: float = float(os.getenv("PLANNER_TEMPERATURE", "0.0"))
 
