@@ -27,6 +27,7 @@ else
         --num-nodes=1 \
         --machine-type="${DEFAULT_MACHINE_TYPE}" \
         --disk-size="${DISK_SIZE_GB}" \
+        --no-enable-autoprovisioning \
         --quiet
     echo "Cluster created."
 fi

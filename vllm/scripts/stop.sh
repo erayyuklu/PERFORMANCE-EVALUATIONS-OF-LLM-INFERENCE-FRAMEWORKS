@@ -98,6 +98,15 @@ resume_cluster() {
 
     check_cluster
 
+    # Disable node auto-provisioning if enabled — NAP conflicts with manual
+    # resize of GPU pools (errors with "GPU request without a defined limit")
+    echo "Disabling node auto-provisioning (if enabled)..."
+    gcloud container clusters update "${CLUSTER_NAME}" \
+        --no-enable-autoprovisioning \
+        --project="${PROJECT_ID}" \
+        --zone="${ZONE}" \
+        --quiet 2>/dev/null || true
+
     # Bring system pool up first so the cluster is schedulable
     echo "Scaling up system node pool (default-pool) to 1..."
     gcloud container clusters resize "${CLUSTER_NAME}" \
