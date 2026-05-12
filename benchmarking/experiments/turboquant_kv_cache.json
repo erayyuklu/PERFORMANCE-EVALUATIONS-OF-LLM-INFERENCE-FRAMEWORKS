@@ -1,10 +1,56 @@
 [
   {
+    "name": "qwen3_kv_fp8_baseline",
+    "description": "FP8 KV cache baseline for Qwen3-8B — reference point for TurboQuant comparison.",
+    "model": "Qwen/Qwen3-8B",
+    "vllm_extra_args": "--kv-cache-dtype fp8",
+    "concurrency": [
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "Qwen3-8B with FP8 KV cache baseline (text-only mode)"
+  },
+  {
+    "name": "qwen3_kv_turboquant_k8v4",
+    "description": "TurboQuant with FP8 keys + 4-bit values on Qwen3-8B — most conservative TurboQuant preset.",
+    "model": "Qwen/Qwen3-8B",
+    "vllm_extra_args": "--kv-cache-dtype turboquant_k8v4",
+    "concurrency": [
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "FP8 keys + 4-bit values, no norm correction"
+  },
+  {
+    "name": "qwen3_kv_turboquant_4bit_nc",
+    "description": "TurboQuant with 4-bit MSE keys + 4-bit values + norm correction on Qwen3-8B.",
+    "model": "Qwen/Qwen3-8B",
+    "vllm_extra_args": "--kv-cache-dtype turboquant_4bit_nc",
+    "concurrency": [
+      32,
+      64,
+      128
+    ],
+    "prompt_categories": [
+      "all"
+    ],
+    "notes": "4-bit keys + 4-bit values + norm correction"
+  },
+  {
     "name": "qwen3_kv_turboquant_k3v4_nc",
     "description": "TurboQuant with 3-bit MSE keys + 4-bit values + norm correction on Qwen3-8B — high compression.",
     "model": "Qwen/Qwen3-8B",
     "vllm_extra_args": "--kv-cache-dtype turboquant_k3v4_nc",
     "concurrency": [
+      32,
       64,
       128
     ],
