@@ -1,0 +1,15 @@
+{
+  "name": "qwen3_kv_turboquant_k3v4_nc",
+  "description": "TurboQuant with 3-bit MSE keys + 4-bit values + norm correction on Qwen3-8B — high compression.",
+  "model": "Qwen/Qwen3-8B",
+  "vllm_extra_args": "--kv-cache-dtype turboquant_k3v4_nc",
+  "concurrency": [
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "3-bit keys + 4-bit values + norm correction"
+}

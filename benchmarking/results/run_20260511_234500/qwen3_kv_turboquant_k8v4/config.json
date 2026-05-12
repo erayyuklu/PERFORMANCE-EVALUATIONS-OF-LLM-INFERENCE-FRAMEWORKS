@@ -1,0 +1,15 @@
+{
+  "name": "qwen3_kv_turboquant_k8v4",
+  "description": "TurboQuant with FP8 keys + 4-bit values on Qwen3-8B — most conservative TurboQuant preset.",
+  "model": "Qwen/Qwen3-8B",
+  "vllm_extra_args": "--kv-cache-dtype turboquant_k8v4",
+  "concurrency": [
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "FP8 keys + 4-bit values, no norm correction"
+}

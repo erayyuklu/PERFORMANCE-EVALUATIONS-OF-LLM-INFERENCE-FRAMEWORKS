@@ -1,0 +1,15 @@
+{
+  "name": "qwen3_kv_fp8_baseline",
+  "description": "FP8 KV cache baseline for Qwen3-8B — reference point for TurboQuant comparison.",
+  "model": "Qwen/Qwen3-8B",
+  "vllm_extra_args": "--kv-cache-dtype fp8",
+  "concurrency": [
+    32,
+    64,
+    128
+  ],
+  "prompt_categories": [
+    "all"
+  ],
+  "notes": "Qwen3-8B with FP8 KV cache baseline (text-only mode)"
+}
