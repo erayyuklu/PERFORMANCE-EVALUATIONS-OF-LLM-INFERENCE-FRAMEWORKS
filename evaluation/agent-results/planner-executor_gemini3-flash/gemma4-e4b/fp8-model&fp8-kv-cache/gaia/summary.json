@@ -1,5 +1,5 @@
 {
-  "timestamp": "20260515_010652",
+  "timestamp": "20260515_011945",
   "model_family": "gemma4-e4b",
   "quantization": "fp8-model&fp8-kv-cache",
   "agent_mode": "planner-executor_gemini3-flash",
@@ -20,5 +20,5 @@
       "accuracy": 0.3396
     }
   },
-  "avg_duration_ms": 92211.87
+  "avg_duration_ms": 99171.11
 }

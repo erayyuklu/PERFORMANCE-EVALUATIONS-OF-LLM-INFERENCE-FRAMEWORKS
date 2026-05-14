@@ -48,7 +48,7 @@ echo "=== POST /api/v1/agent/run ==="
 start_ts=$(now_ms)
 AGENT_RESPONSE=$(curl -s --max-time 300 "${BASE_URL}/api/v1/agent/run" \
     -H "Content-Type: application/json" \
-    -d '{"task": "What is the weather in Istanbul?"}')
+    -d '{"task": "Use web_search, visit_webpage, python_execute, read_document tools. I need to check if you can use the tools. Make sure to use all the tools at least once."}')
 end_ts=$(now_ms)
 
 echo "${AGENT_RESPONSE}" | head -c 2000
