@@ -12,9 +12,12 @@ class Settings:
     MODE: str = os.getenv("MODE", "single-agent").lower()
 
     # Planner (external API)
-    PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "gemini-3-flash")
-    PLANNER_API_KEY: str = os.getenv("PLANNER_API_KEY", "")
+    PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "gemini-3-flash-preview")
     PLANNER_TEMPERATURE: float = float(os.getenv("PLANNER_TEMPERATURE", "0.0"))
+
+    # Vertex AI
+    GCP_PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "")
+    GCP_LOCATION: str = os.getenv("GCP_LOCATION", "global")
 
     VLLM_MODEL_NAME: str = os.getenv("VLLM_MODEL_NAME", "Qwen/Qwen3-8B")
     VLLM_BASE_URL: str = os.getenv(

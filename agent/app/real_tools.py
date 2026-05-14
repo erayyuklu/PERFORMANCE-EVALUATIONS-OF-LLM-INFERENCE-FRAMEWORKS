@@ -67,12 +67,12 @@ async def visit_webpage(url: str) -> str:
 @tool
 async def python_execute(code: str) -> str:
     """Execute Python code in a secure cloud sandbox. Returns stdout and stderr."""
-    from e2b_code_interpreter import Sandbox
+    from e2b_code_interpreter import AsyncSandbox
 
     try:
-        sandbox = Sandbox()
-        execution = sandbox.run_code(code)
-        sandbox.kill()
+        sandbox = await AsyncSandbox.create()
+        execution = await sandbox.run_code(code)
+        await sandbox.kill()
 
         parts = []
         if execution.text:

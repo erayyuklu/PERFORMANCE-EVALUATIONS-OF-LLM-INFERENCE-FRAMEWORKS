@@ -7,21 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../vllm/infra_config.env"
 
-# Parse arguments
-AGENT_MODE="single-agent"
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --mode)
-      AGENT_MODE="$2"
-      shift 2
-      ;;
-    *)
-      echo "Unknown option: $1"
-      echo "Usage: $0 [--mode <single-agent|planner-executor>]"
-      exit 1
-      ;;
-  esac
-done
+# Parse config.env for display
+source <(tr -d '\r' < "${SCRIPT_DIR}/config.env")
+AGENT_MODE="${MODE:-single-agent}"
 
 # 1. Fetch GCP Project ID
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
@@ -84,7 +72,7 @@ kubectl rollout status statefulset/agent-postgres -n "${NAMESPACE}" --timeout=12
 
 # Deploy agent application
 echo "==> Deploying Agent API..."
-sed -e "s/PROJECT_ID/${PROJECT_ID}/g" -e "s/AGENT_MODE/${AGENT_MODE}/g" "${SCRIPT_DIR}/k8s/deployment.yaml" | kubectl apply -f -
+sed -e "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/k8s/deployment.yaml" | kubectl apply -f -
 kubectl apply -f "${SCRIPT_DIR}/k8s/service.yaml"
 kubectl apply -f "${SCRIPT_DIR}/k8s/hpa.yaml"
 kubectl apply -f "${SCRIPT_DIR}/k8s/service-monitor.yaml" || echo "    ⚠ ServiceMonitor CRD not found (monitoring stack not deployed yet?)"

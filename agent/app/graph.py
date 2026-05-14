@@ -14,7 +14,7 @@ The graph is compiled once at application startup and reused for all requests.
 import json
 import logging
 from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import StateGraph, MessagesState, START, END
@@ -25,11 +25,12 @@ from .schemas import Plan
 logger = logging.getLogger(__name__)
 
 
-def _create_planner_llm() -> ChatGoogleGenerativeAI:
-    """External API LLM for planning (Gemini)."""
-    return ChatGoogleGenerativeAI(
+def _create_planner_llm() -> ChatVertexAI:
+    """External API LLM for planning (Gemini via Vertex AI)."""
+    return ChatVertexAI(
         model=settings.PLANNER_MODEL_NAME,
-        google_api_key=settings.PLANNER_API_KEY,
+        project=settings.GCP_PROJECT_ID,
+        location=settings.GCP_LOCATION,
         temperature=settings.PLANNER_TEMPERATURE,
     )
 

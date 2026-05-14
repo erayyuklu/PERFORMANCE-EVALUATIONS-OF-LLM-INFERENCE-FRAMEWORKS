@@ -27,6 +27,8 @@ spec:
                     values:
                       - gpu-pool
 
+      serviceAccountName: agent-vertex
+
       containers:
         - name: agent-server
           image: europe-west3-docker.pkg.dev/PROJECT_ID/agent/agent-langgraph:latest
@@ -35,9 +37,6 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
-          env:
-            - name: MODE
-              value: "AGENT_MODE"
           envFrom:
             - configMapRef:
                 name: agent-config
@@ -47,10 +46,10 @@ spec:
           resources:
             requests:
               cpu: "500m"
-              memory: "512Mi"
+              memory: "1Gi"
             limits:
               cpu: "1"
-              memory: "1Gi"
+              memory: "2Gi"
           readinessProbe:
             httpGet:
               path: /health
