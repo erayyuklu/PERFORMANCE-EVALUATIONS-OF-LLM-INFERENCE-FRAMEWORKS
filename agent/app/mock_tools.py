@@ -98,7 +98,7 @@ async def calculate(expression: str) -> str:
         return f"{expression} = {data['result']}"
 
 
-def get_tools():
+def get_mock_tools():
     """Return agent tools based on TOOL_MODE setting.
 
     - ``mock`` (default): mock-tools service for load testing.

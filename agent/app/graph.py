@@ -5,7 +5,7 @@ Creates a ReAct-style agent using LangGraph's prebuilt create_react_agent.
 
 The agent uses:
   - ChatOpenAI pointed at the in-cluster vLLM service (OpenAI-compatible API)
-  - Tool definitions from tools.py (routed to the mock-tools service)
+  - Tool definitions from mock_tools.py (routed to the mock-tools service)
   - Optional AsyncPostgresSaver checkpointer for state persistence
 
 The graph is compiled once at application startup and reused for all requests.
@@ -18,7 +18,7 @@ from langchain_google_vertexai import ChatVertexAI
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import StateGraph, MessagesState, START, END
-from .tools import get_tools
+from .mock_tools import get_mock_tools
 from .config import settings
 from .schemas import Plan
 
@@ -75,7 +75,7 @@ async def planner_node(state: MessagesState) -> dict:
     structured_llm = planner_llm.with_structured_output(Plan)
     
     # Build planner messages: system prompt + user's original message
-    tools = get_tools()
+    tools = get_mock_tools()
     user_message = state["messages"][-1]
     planner_messages = [
         SystemMessage(content=_planner_system_prompt(tools)),
@@ -98,7 +98,7 @@ def create_agent_graph(checkpointer=None):
     Build and compile the LangGraph agent depending on the configured MODE.
     """
     executor_llm = _create_executor_llm()
-    tools = get_tools()
+    tools = get_mock_tools()
 
     logger.info(f"[graph] Tools registered: {[t.name for t in tools]}")
     logger.info(f"[graph] Mode configured: {settings.MODE}")
