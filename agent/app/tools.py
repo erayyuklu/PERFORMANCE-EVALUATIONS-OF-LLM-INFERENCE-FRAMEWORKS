@@ -99,5 +99,13 @@ async def calculate(expression: str) -> str:
 
 
 def get_tools():
-    """Return all available agent tools."""
+    """Return agent tools based on TOOL_MODE setting.
+
+    - ``mock`` (default): mock-tools service for load testing.
+    - ``real``: live web search, E2B sandbox, file reader for GAIA evaluation.
+    """
+    if settings.TOOL_MODE == "real":
+        from .real_tools import get_real_tools
+
+        return get_real_tools()
     return [search_wikipedia, get_financial_data, get_weather, calculate]

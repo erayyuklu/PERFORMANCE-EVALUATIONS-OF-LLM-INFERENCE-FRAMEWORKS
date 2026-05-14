@@ -24,6 +24,10 @@ class Settings:
         "MOCK_TOOLS_URL",
         "http://mock-tools-service.mock-tools.svc.cluster.local",
     )
+    # Tool mode: "mock" (default, static data) or "real" (web search, E2B, etc.)
+    TOOL_MODE: str = os.getenv("TOOL_MODE", "mock").lower()
+    E2B_API_KEY: str = os.getenv("E2B_API_KEY", "")
+
     TEMPERATURE: float = float(os.getenv("AGENT_TEMPERATURE", "0.0"))
     MAX_TOKENS: int = int(os.getenv("AGENT_MAX_TOKENS", "2048"))
 

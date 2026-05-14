@@ -1,0 +1,24 @@
+{
+  "timestamp": "20260514_213747",
+  "model_family": "gemma4-e4b",
+  "quantization": "fp8-model&fp8-kv-cache",
+  "agent_mode": "single-agent",
+  "agent_url": "http://35.198.71.166:80",
+  "dataset": "gaia-benchmark/GAIA",
+  "config": "2023_all",
+  "split": "validation",
+  "levels": [
+    1
+  ],
+  "total": 53,
+  "correct": 15,
+  "accuracy": 0.283,
+  "per_level": {
+    "level_1": {
+      "total": 53,
+      "correct": 15,
+      "accuracy": 0.283
+    }
+  },
+  "avg_duration_ms": 47000.62
+}

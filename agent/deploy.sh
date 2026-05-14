@@ -97,11 +97,6 @@ kubectl rollout status deployment/agent-server -n "${NAMESPACE}" --timeout=300s
 echo ""
 echo "==========================================================================="
 echo "  ✅  LangGraph Agent API deployed successfully!"
-echo "  Internal URL: http://agent-service.agent.svc.cluster.local"
 echo ""
-echo "  Smoke test:"
-echo "    kubectl port-forward svc/agent-service 8000:80 -n ${NAMESPACE}"
-echo '    curl -X POST http://localhost:8000/api/v1/agent/run \'
-echo '      -H "Content-Type: application/json" \'
-echo '      -d '"'"'{"task": "What is the weather in Istanbul?"}'"'"''
+echo "  Smoke test:  bash ${SCRIPT_DIR}/scripts/ping.sh"
 echo "==========================================================================="

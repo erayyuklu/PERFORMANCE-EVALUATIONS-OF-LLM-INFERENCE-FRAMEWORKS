@@ -6,7 +6,7 @@ metadata:
   labels:
     app: agent-server
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: agent-server
   ports:

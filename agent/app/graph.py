@@ -48,12 +48,20 @@ def _create_executor_llm() -> ChatOpenAI:
     )
     return llm
 
-PLANNER_SYSTEM_PROMPT = (
-    "You are a planning assistant. Given the user's request, produce a concise "
-    "plan that will help a smaller language model answer the question "
-    "correctly. Focus on the approach, key facts to look up, and which tools to use. "
-    "Available tools: search_wikipedia, get_financial_data, get_weather, calculate."
-)
+def _build_tool_description(tools) -> str:
+    """Build a formatted list of tool names and descriptions."""
+    return "\n".join(f"  - {t.name}: {t.description}" for t in tools)
+
+
+def _planner_system_prompt(tools) -> str:
+    tool_desc = _build_tool_description(tools)
+    return (
+        "You are a planning assistant. Given the user's request, produce a concise "
+        "plan that will help a smaller language model answer the question "
+        "correctly. Focus on the approach, key facts to look up, and which tools to use.\n"
+        f"Available tools:\n{tool_desc}"
+    )
+
 
 EXECUTOR_SYSTEM_PROMPT = (
     "You are an executor agent. You will receive a plan from a larger model. "
@@ -66,9 +74,10 @@ async def planner_node(state: MessagesState) -> dict:
     structured_llm = planner_llm.with_structured_output(Plan)
     
     # Build planner messages: system prompt + user's original message
+    tools = get_tools()
     user_message = state["messages"][-1]
     planner_messages = [
-        SystemMessage(content=PLANNER_SYSTEM_PROMPT),
+        SystemMessage(content=_planner_system_prompt(tools)),
         user_message,
     ]
     
