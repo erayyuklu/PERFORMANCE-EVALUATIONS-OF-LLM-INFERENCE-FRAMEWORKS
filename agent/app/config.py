@@ -8,7 +8,7 @@ import os
 class Settings:
     """Settings loaded from environment variables with sensible defaults."""
 
-    # Architecture Flag
+    # Architecture Flag: "single-agent", "planner-executor", or "planner-only"
     MODE: str = os.getenv("MODE", "single-agent").lower()
 
     # Planner (external API)

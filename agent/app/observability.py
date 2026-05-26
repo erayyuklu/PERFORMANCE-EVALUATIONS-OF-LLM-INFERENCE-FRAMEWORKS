@@ -21,6 +21,9 @@ done through the top-level ``langfuse`` module, not on the handler itself.
 """
 
 import logging
+from typing import Any
+from langchain_core.callbacks import AsyncCallbackHandler
+from langchain_core.outputs import LLMResult
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -92,3 +95,46 @@ def shutdown_langfuse():
             logger.info("[observability] Langfuse shut down cleanly.")
         except Exception as exc:
             logger.warning(f"[observability] Langfuse shutdown error: {exc}")
+
+
+class TokenTrackerCallbackHandler(AsyncCallbackHandler):
+    """
+    Callback handler to track token usage for planner and executor models separately.
+    """
+    def __init__(self):
+        self.planner_input_tokens = 0
+        self.planner_output_tokens = 0
+        self.executor_input_tokens = 0
+        self.executor_output_tokens = 0
+
+    async def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        input_tokens = 0
+        output_tokens = 0
+
+        # 1. Try modern LangChain usage_metadata
+        for gen_list in response.generations:
+            for gen in gen_list:
+                if hasattr(gen, "message"):
+                    message = gen.message
+                    if hasattr(message, "usage_metadata") and message.usage_metadata:
+                        input_tokens += message.usage_metadata.get("input_tokens", 0)
+                        output_tokens += message.usage_metadata.get("output_tokens", 0)
+
+        # 2. Fallback to llm_output if usage_metadata didn't populate anything
+        if input_tokens == 0 and output_tokens == 0 and response.llm_output:
+            token_usage = response.llm_output.get("token_usage", {})
+            if token_usage:
+                input_tokens = token_usage.get("prompt_tokens") or token_usage.get("input_tokens") or 0
+                output_tokens = token_usage.get("completion_tokens") or token_usage.get("output_tokens") or 0
+
+        # Determine model role (planner or executor)
+        tags = kwargs.get("tags") or []
+        from .config import settings
+        is_planner = (settings.MODE == "planner-only") or ("planner" in tags)
+
+        if is_planner:
+            self.planner_input_tokens += input_tokens
+            self.planner_output_tokens += output_tokens
+        else:
+            self.executor_input_tokens += input_tokens
+            self.executor_output_tokens += output_tokens

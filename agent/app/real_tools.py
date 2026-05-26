@@ -23,19 +23,27 @@ MAX_PAGE_CHARS = 20_000  # Truncation limit for visit_webpage output
 @tool
 async def web_search(query: str) -> str:
     """Search the web for a query. Returns top results with titles, URLs, and snippets."""
-    from ddgs import DDGS
+    from ddgs import AsyncDDGS
+    import asyncio
 
-    try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, region="wt-wt", max_results=8))
-        if not results:
-            return "No search results found."
-        parts = []
-        for r in results:
-            parts.append(f"**{r['title']}**\n{r['href']}\n{r['body']}")
-        return "\n\n".join(parts)
-    except Exception as exc:
-        return f"Search error: {exc}"
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with AsyncDDGS(timeout=20.0) as ddgs:
+                results = await ddgs.text(query, region="wt-wt", max_results=8)
+            if not results:
+                return "No search results found."
+            parts = []
+            for r in results:
+                parts.append(f"**{r['title']}**\n{r['href']}\n{r['body']}")
+            return "\n\n".join(parts)
+        except Exception as exc:
+            logger.warning(f"Web search attempt {attempt + 1} failed: {exc}")
+            if attempt < max_retries - 1:
+                # Exponential backoff: 2s, 4s
+                await asyncio.sleep(2.0 * (attempt + 1))
+            else:
+                return f"Search error after {max_retries} attempts: {exc}"
 
 
 @tool

@@ -227,8 +227,8 @@ async def _call_agent(
     task: str,
     semaphore: asyncio.Semaphore,
     agent_url: str,
-) -> tuple[str, float]:
-    """Send a task to the agent API and return (result_text, duration_ms)."""
+) -> tuple[str, float, dict]:
+    """Send a task to the agent API and return (result_text, duration_ms, token_usage)."""
     async with semaphore:
         t0 = time.perf_counter()
         try:
@@ -241,11 +241,22 @@ async def _call_agent(
             data = resp.json()
             result_text = data.get("result", "")
             duration_ms = (time.perf_counter() - t0) * 1000
-            return result_text, duration_ms
+            token_usage = {
+                "planner_input_tokens": data.get("planner_input_tokens", 0),
+                "planner_output_tokens": data.get("planner_output_tokens", 0),
+                "executor_input_tokens": data.get("executor_input_tokens", 0),
+                "executor_output_tokens": data.get("executor_output_tokens", 0),
+            }
+            return result_text, duration_ms, token_usage
         except Exception as exc:
             duration_ms = (time.perf_counter() - t0) * 1000
             logger.warning(f"Agent call failed: {exc}")
-            return f"[ERROR] {exc}", duration_ms
+            return f"[ERROR] {exc}", duration_ms, {
+                "planner_input_tokens": 0,
+                "planner_output_tokens": 0,
+                "executor_input_tokens": 0,
+                "executor_output_tokens": 0,
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +327,7 @@ async def run_evaluation(args: argparse.Namespace):
             tasks.append((task_id, question, expected, level, file_name, prompt))
 
         async def _process(task_id, question, expected, level, file_name, prompt):
-            result_text, duration_ms = await _call_agent(client, prompt, semaphore, agent_url)
+            result_text, duration_ms, token_usage = await _call_agent(client, prompt, semaphore, agent_url)
             predicted = _extract_final_answer(result_text)
             correct = score(predicted, expected)
 
@@ -329,6 +340,7 @@ async def run_evaluation(args: argparse.Namespace):
                 "predicted": predicted,
                 "score": correct,
                 "duration_ms": round(duration_ms, 2),
+                **token_usage,
             }
 
             status = "CORRECT" if correct else "WRONG"
@@ -362,6 +374,17 @@ async def run_evaluation(args: argparse.Namespace):
     correct = int(df["score"].sum())
     accuracy = correct / total if total > 0 else 0.0
 
+    # Calculate token statistics
+    total_planner_input_tokens = int(df["planner_input_tokens"].sum()) if "planner_input_tokens" in df else 0
+    total_planner_output_tokens = int(df["planner_output_tokens"].sum()) if "planner_output_tokens" in df else 0
+    total_executor_input_tokens = int(df["executor_input_tokens"].sum()) if "executor_input_tokens" in df else 0
+    total_executor_output_tokens = int(df["executor_output_tokens"].sum()) if "executor_output_tokens" in df else 0
+
+    avg_planner_input_tokens = round(float(df["planner_input_tokens"].mean()), 2) if "planner_input_tokens" in df and total > 0 else 0.0
+    avg_planner_output_tokens = round(float(df["planner_output_tokens"].mean()), 2) if "planner_output_tokens" in df and total > 0 else 0.0
+    avg_executor_input_tokens = round(float(df["executor_input_tokens"].mean()), 2) if "executor_input_tokens" in df and total > 0 else 0.0
+    avg_executor_output_tokens = round(float(df["executor_output_tokens"].mean()), 2) if "executor_output_tokens" in df and total > 0 else 0.0
+
     per_level = {}
     for lvl in sorted(df["level"].unique()):
         lvl_df = df[df["level"] == lvl]
@@ -389,6 +412,14 @@ async def run_evaluation(args: argparse.Namespace):
         "accuracy": round(accuracy, 4),
         "per_level": per_level,
         "avg_duration_ms": round(float(df["duration_ms"].mean()), 2) if total > 0 else 0.0,
+        "total_planner_input_tokens": total_planner_input_tokens,
+        "total_planner_output_tokens": total_planner_output_tokens,
+        "total_executor_input_tokens": total_executor_input_tokens,
+        "total_executor_output_tokens": total_executor_output_tokens,
+        "avg_planner_input_tokens": avg_planner_input_tokens,
+        "avg_planner_output_tokens": avg_planner_output_tokens,
+        "avg_executor_input_tokens": avg_executor_input_tokens,
+        "avg_executor_output_tokens": avg_executor_output_tokens,
     }
 
     with open(summary_path, "w") as f:
@@ -406,6 +437,10 @@ async def run_evaluation(args: argparse.Namespace):
             f"= {lvl_data['accuracy']:.1%}"
         )
     logger.info(f"Avg duration: {summary['avg_duration_ms']:.0f}ms")
+    logger.info(f"Planner Tokens - Total Input: {total_planner_input_tokens} | Total Output: {total_planner_output_tokens}")
+    logger.info(f"Executor Tokens - Total Input: {total_executor_input_tokens} | Total Output: {total_executor_output_tokens}")
+    logger.info(f"Planner Tokens - Avg Input: {avg_planner_input_tokens:.1f} | Avg Output: {avg_planner_output_tokens:.1f}")
+    logger.info(f"Executor Tokens - Avg Input: {avg_executor_input_tokens:.1f} | Avg Output: {avg_executor_output_tokens:.1f}")
     logger.info(f"Results saved to: {run_dir}")
     logger.info("=" * 60)
 
@@ -422,7 +457,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default=None, help="Output base directory")
     parser.add_argument("--model-family", type=str, default=None, help="Model family (e.g. qwen-3)")
     parser.add_argument("--quantization", type=str, default=None, help="Quantization config")
-    parser.add_argument("--agent-mode", type=str, default=None, help="Agent mode (single-agent|planner-executor)")
+    parser.add_argument("--agent-mode", type=str, default=None, help="Agent mode (single-agent|planner-only|planner-executor)")
     parser.add_argument("--max-concurrent", type=int, default=None, help="Max concurrent requests")
     args = parser.parse_args()
     asyncio.run(run_evaluation(args))

@@ -16,6 +16,7 @@ import logging
 from langchain_openai import ChatOpenAI
 from langchain_google_vertexai import ChatVertexAI
 from langchain_core.messages import SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import StateGraph, MessagesState, START, END
 from .mock_tools import get_mock_tools
@@ -69,7 +70,7 @@ EXECUTOR_SYSTEM_PROMPT = (
     "Follow the plan strictly to answer the user's request using the available tools."
 )
 
-async def planner_node(state: MessagesState) -> dict:
+async def planner_node(state: MessagesState, config: RunnableConfig = None) -> dict:
     """Call the Planner LLM to generate a structured plan."""
     planner_llm = _create_planner_llm()
     structured_llm = planner_llm.with_structured_output(Plan)
@@ -82,7 +83,14 @@ async def planner_node(state: MessagesState) -> dict:
         user_message,
     ]
     
-    plan_obj = await structured_llm.ainvoke(planner_messages)
+    # Inject planner tag to help the callback handler identify this run
+    planner_config = dict(config) if config else {}
+    tags = list(planner_config.get("tags") or [])
+    if "planner" not in tags:
+        tags.append("planner")
+    planner_config["tags"] = tags
+    
+    plan_obj = await structured_llm.ainvoke(planner_messages, config=planner_config)
     plan_json = json.dumps(plan_obj.model_dump(), indent=2)
     
     # Inject the plan as a SystemMessage for the Executor
@@ -97,13 +105,51 @@ def create_agent_graph(checkpointer=None):
     """
     Build and compile the LangGraph agent depending on the configured MODE.
     """
-    executor_llm = _create_executor_llm()
     tools = get_mock_tools()
 
     logger.info(f"[graph] Tools registered: {[t.name for t in tools]}")
     logger.info(f"[graph] Mode configured: {settings.MODE}")
 
-    if settings.MODE != "planner-executor":
+    if settings.MODE == "planner-only":
+        planner_llm = _create_planner_llm()
+        graph = create_react_agent(
+            planner_llm,
+            tools,
+            checkpointer=checkpointer,
+        )
+        logger.info("[graph] Planner-only ReAct graph compiled successfully.")
+        return graph
+
+    elif settings.MODE == "planner-executor":
+        executor_llm = _create_executor_llm()
+        def _executor_prompt(state: MessagesState) -> list:
+            # OpenAI-compatible APIs require SystemMessages to precede HumanMessages.
+            # planner_node appends the plan as a SystemMessage (add_messages reducer),
+            # so we reorder here: system messages first, then the rest.
+            msgs = state["messages"]
+            sys_msgs = [m for m in msgs if isinstance(m, SystemMessage)]
+            other_msgs = [m for m in msgs if not isinstance(m, SystemMessage)]
+            return sys_msgs + other_msgs
+
+        # Build the Executor as a prebuilt ReAct sub-agent
+        executor_agent = create_react_agent(executor_llm, tools, prompt=_executor_prompt)
+
+        # Build the outer graph
+        workflow = StateGraph(MessagesState)
+        workflow.add_node("planner", planner_node)
+        workflow.add_node("executor", executor_agent)
+        
+        workflow.add_edge(START, "planner")
+        workflow.add_edge("planner", "executor")
+        workflow.add_edge("executor", END)
+        
+        graph = workflow.compile(checkpointer=checkpointer)
+        logger.info("[graph] Planner-Executor graph compiled successfully.")
+        return graph
+
+    else:
+        # Default to single-agent
+        executor_llm = _create_executor_llm()
         graph = create_react_agent(
             executor_llm,
             tools,
@@ -111,28 +157,3 @@ def create_agent_graph(checkpointer=None):
         )
         logger.info("[graph] Single-agent ReAct graph compiled successfully.")
         return graph
-
-    def _executor_prompt(state: MessagesState) -> list:
-        # OpenAI-compatible APIs require SystemMessages to precede HumanMessages.
-        # planner_node appends the plan as a SystemMessage (add_messages reducer),
-        # so we reorder here: system messages first, then the rest.
-        msgs = state["messages"]
-        sys_msgs = [m for m in msgs if isinstance(m, SystemMessage)]
-        other_msgs = [m for m in msgs if not isinstance(m, SystemMessage)]
-        return sys_msgs + other_msgs
-
-    # Build the Executor as a prebuilt ReAct sub-agent
-    executor_agent = create_react_agent(executor_llm, tools, prompt=_executor_prompt)
-
-    # Build the outer graph
-    workflow = StateGraph(MessagesState)
-    workflow.add_node("planner", planner_node)
-    workflow.add_node("executor", executor_agent)
-    
-    workflow.add_edge(START, "planner")
-    workflow.add_edge("planner", "executor")
-    workflow.add_edge("executor", END)
-    
-    graph = workflow.compile(checkpointer=checkpointer)
-    logger.info("[graph] Planner-Executor graph compiled successfully.")
-    return graph

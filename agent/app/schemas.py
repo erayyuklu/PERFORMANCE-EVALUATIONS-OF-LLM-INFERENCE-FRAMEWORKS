@@ -28,3 +28,7 @@ class AgentResponse(BaseModel):
     steps: int
     tool_calls: int
     duration_ms: float
+    planner_input_tokens: Optional[int] = 0
+    planner_output_tokens: Optional[int] = 0
+    executor_input_tokens: Optional[int] = 0
+    executor_output_tokens: Optional[int] = 0

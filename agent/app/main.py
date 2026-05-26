@@ -24,7 +24,7 @@ from langchain_core.messages import AIMessage, ToolMessage, SystemMessage
 from .config import settings
 from .graph import create_agent_graph
 from .schemas import AgentRequest, AgentResponse
-from .observability import get_langfuse_handler, flush_langfuse, shutdown_langfuse
+from .observability import get_langfuse_handler, flush_langfuse, shutdown_langfuse, TokenTrackerCallbackHandler
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -104,11 +104,14 @@ async def run_agent(request: AgentRequest):
     graph = app.state.graph
     t_start = time.perf_counter()
 
-    # Build config with optional Langfuse callback
+    # Build config with optional Langfuse callback and token tracker
+    token_tracker = TokenTrackerCallbackHandler()
     config: dict = {}
+    callbacks = [token_tracker]
     handler = get_langfuse_handler()
     if handler:
-        config["callbacks"] = [handler]
+        callbacks.append(handler)
+    config["callbacks"] = callbacks
 
     # Use session_id for checkpointed conversations, or generate a fresh one
     thread_id = request.session_id or str(uuid.uuid4())
@@ -135,13 +138,35 @@ async def run_agent(request: AgentRequest):
     final_message = messages[-1] if messages else None
     result_text = ""
     if final_message and isinstance(final_message, AIMessage):
-        result_text = final_message.content or ""
+        content = final_message.content
+        if isinstance(content, list):
+            text_parts = []
+            for block in content:
+                if isinstance(block, str):
+                    text_parts.append(block)
+                elif isinstance(block, dict):
+                    if block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                    elif "text" in block:
+                        text_parts.append(block["text"])
+                else:
+                    text_parts.append(str(block))
+            result_text = "".join(text_parts)
+        else:
+            result_text = str(content) if content is not None else ""
 
     # Extract plan from the planner's SystemMessage if present
     plan_text = None
     for m in messages:
-        if isinstance(m, SystemMessage) and "[PLAN FROM PLANNER]" in str(m.content):
-            plan_text = m.content
+        if isinstance(m, SystemMessage) and m.content and "[PLAN FROM PLANNER]" in str(m.content):
+            content = m.content
+            if isinstance(content, list):
+                plan_text = "".join(
+                    block if isinstance(block, str) else (block.get("text", "") if isinstance(block, dict) else str(block))
+                    for block in content
+                )
+            else:
+                plan_text = str(content)
             break
 
     return AgentResponse(
@@ -151,4 +176,8 @@ async def run_agent(request: AgentRequest):
         steps=steps,
         tool_calls=tool_calls,
         duration_ms=round(duration_ms, 2),
+        planner_input_tokens=token_tracker.planner_input_tokens,
+        planner_output_tokens=token_tracker.planner_output_tokens,
+        executor_input_tokens=token_tracker.executor_input_tokens,
+        executor_output_tokens=token_tracker.executor_output_tokens,
     )
