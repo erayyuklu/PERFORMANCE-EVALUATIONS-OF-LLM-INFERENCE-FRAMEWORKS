@@ -1,5 +1,5 @@
 {
-  "timestamp": "20260526_193622",
+  "timestamp": "20260604_233114",
   "model_family": "gemini-3-flash",
   "quantization": "no-quantization",
   "agent_mode": "planner-only_gemini3-flash",
@@ -11,22 +11,22 @@
     1
   ],
   "total": 53,
-  "correct": 14,
-  "accuracy": 0.2642,
+  "correct": 39,
+  "accuracy": 0.7358,
   "per_level": {
     "level_1": {
       "total": 53,
-      "correct": 14,
-      "accuracy": 0.2642
+      "correct": 39,
+      "accuracy": 0.7358
     }
   },
-  "avg_duration_ms": 88568.19,
-  "total_planner_input_tokens": 129513,
-  "total_planner_output_tokens": 11902,
+  "avg_duration_ms": 318870.07,
+  "total_planner_input_tokens": 3605811,
+  "total_planner_output_tokens": 39989,
   "total_executor_input_tokens": 0,
   "total_executor_output_tokens": 0,
-  "avg_planner_input_tokens": 2443.64,
-  "avg_planner_output_tokens": 224.57,
+  "avg_planner_input_tokens": 68034.17,
+  "avg_planner_output_tokens": 754.51,
   "avg_executor_input_tokens": 0.0,
   "avg_executor_output_tokens": 0.0
 }

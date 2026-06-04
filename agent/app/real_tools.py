@@ -23,14 +23,17 @@ MAX_PAGE_CHARS = 20_000  # Truncation limit for visit_webpage output
 @tool
 async def web_search(query: str) -> str:
     """Search the web for a query. Returns top results with titles, URLs, and snippets."""
-    from ddgs import AsyncDDGS
+    from ddgs import DDGS
     import asyncio
+
+    def run_search():
+        with DDGS(timeout=20.0) as ddgs:
+            return ddgs.text(query, region="wt-wt", max_results=8)
 
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            async with AsyncDDGS(timeout=20.0) as ddgs:
-                results = await ddgs.text(query, region="wt-wt", max_results=8)
+            results = await asyncio.to_thread(run_search)
             if not results:
                 return "No search results found."
             parts = []

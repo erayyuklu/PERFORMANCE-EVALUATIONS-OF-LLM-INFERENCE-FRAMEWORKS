@@ -76,6 +76,9 @@ LIMIT = int(_env.get("LIMIT", "0"))
 OUTPUT_DIR = _env.get("OUTPUT_DIR", "../results")
 REQUEST_TIMEOUT = int(_env.get("REQUEST_TIMEOUT", "180"))
 MAX_CONCURRENT = int(_env.get("MAX_CONCURRENT", "4"))
+MAX_RETRIES = int(_env.get("MAX_RETRIES", "3"))
+RESUME = _env.get("RESUME", "false").lower() in ("true", "1", "yes")
+
 
 
 def _discover_agent_url() -> str:
@@ -227,36 +230,78 @@ async def _call_agent(
     task: str,
     semaphore: asyncio.Semaphore,
     agent_url: str,
+    max_retries: int = 3,
+    initial_delay: float = 2.0,
 ) -> tuple[str, float, dict]:
-    """Send a task to the agent API and return (result_text, duration_ms, token_usage)."""
+    """Send a task to the agent API and return (result_text, duration_ms, token_usage) with retries."""
     async with semaphore:
-        t0 = time.perf_counter()
-        try:
-            resp = await client.post(
-                f"{agent_url}/api/v1/agent/run",
-                json={"task": task},
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            result_text = data.get("result", "")
-            duration_ms = (time.perf_counter() - t0) * 1000
-            token_usage = {
-                "planner_input_tokens": data.get("planner_input_tokens", 0),
-                "planner_output_tokens": data.get("planner_output_tokens", 0),
-                "executor_input_tokens": data.get("executor_input_tokens", 0),
-                "executor_output_tokens": data.get("executor_output_tokens", 0),
-            }
-            return result_text, duration_ms, token_usage
-        except Exception as exc:
-            duration_ms = (time.perf_counter() - t0) * 1000
-            logger.warning(f"Agent call failed: {exc}")
-            return f"[ERROR] {exc}", duration_ms, {
-                "planner_input_tokens": 0,
-                "planner_output_tokens": 0,
-                "executor_input_tokens": 0,
-                "executor_output_tokens": 0,
-            }
+        attempt = 0
+        while True:
+            t0 = time.perf_counter()
+            error_msg = None
+            try:
+                resp = await client.post(
+                    f"{agent_url}/api/v1/agent/run",
+                    json={"task": task},
+                    timeout=REQUEST_TIMEOUT,
+                )
+                
+                # Check status code
+                if resp.status_code >= 400:
+                    try:
+                        err_body = resp.text
+                    except Exception:
+                        err_body = ""
+                    raise httpx.HTTPStatusError(
+                        f"Status {resp.status_code}: {err_body[:200]}",
+                        request=resp.request,
+                        response=resp,
+                    )
+                
+                data = resp.json()
+                result_text = data.get("result", "")
+                
+                # Check if result_text contains an error message or if predicted starts with [ERROR]
+                predicted_check = _extract_final_answer(result_text)
+                has_error = (
+                    result_text.startswith("[ERROR]") or
+                    predicted_check.startswith("[ERROR]") or
+                    "http://status/500" in result_text or
+                    "500 Internal Server Error" in result_text
+                )
+                
+                if has_error:
+                    raise ValueError(f"Agent returned error in result: {result_text[:200]}")
+                
+                duration_ms = (time.perf_counter() - t0) * 1000
+                token_usage = {
+                    "planner_input_tokens": data.get("planner_input_tokens", 0),
+                    "planner_output_tokens": data.get("planner_output_tokens", 0),
+                    "executor_input_tokens": data.get("executor_input_tokens", 0),
+                    "executor_output_tokens": data.get("executor_output_tokens", 0),
+                }
+                return result_text, duration_ms, token_usage
+
+            except Exception as exc:
+                duration_ms = (time.perf_counter() - t0) * 1000
+                attempt += 1
+                error_msg = str(exc)
+                logger.warning(
+                    f"Agent call failed (attempt {attempt}/{max_retries + 1}): {exc} "
+                    f"(duration: {duration_ms:.0f}ms)"
+                )
+                
+                if attempt > max_retries:
+                    return f"[ERROR] {error_msg}", duration_ms, {
+                        "planner_input_tokens": 0,
+                        "planner_output_tokens": 0,
+                        "executor_input_tokens": 0,
+                        "executor_output_tokens": 0,
+                    }
+                
+                delay = initial_delay * (2 ** (attempt - 1))
+                logger.info(f"Retrying in {delay:.1f}s...")
+                await asyncio.sleep(delay)
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +317,8 @@ async def run_evaluation(args: argparse.Namespace):
     quantization = args.quantization or QUANTIZATION
     agent_mode = args.agent_mode or AGENT_MODE
     max_concurrent = args.max_concurrent or MAX_CONCURRENT
+    max_retries = args.max_retries if args.max_retries is not None else MAX_RETRIES
+    resume = args.resume or RESUME
 
     # ── Download dataset ─────────────────────────────────────────────────
     logger.info(f"Downloading GAIA dataset: {GAIA_DATASET} ({GAIA_CONFIG}/{GAIA_SPLIT})")
@@ -305,56 +352,103 @@ async def run_evaluation(args: argparse.Namespace):
 
     # ── Run questions ────────────────────────────────────────────────────
     semaphore = asyncio.Semaphore(max_concurrent)
+    
+    # Load existing results if resuming
+    existing_results = {}
+    if resume and results_path.exists():
+        logger.info(f"Found existing results file at {results_path}. Loading for resume...")
+        try:
+            with open(results_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                        tid = record.get("task_id")
+                        if tid:
+                            pred = record.get("predicted", "")
+                            has_error = (
+                                pred.startswith("[ERROR]") or
+                                "http://status/500" in pred or
+                                "500 Internal Server Error" in pred
+                            )
+                            if not has_error:
+                                existing_results[tid] = record
+                    except json.JSONDecodeError:
+                        pass
+            logger.info(f"Loaded {len(existing_results)} successful existing results.")
+        except Exception as e:
+            logger.warning(f"Failed to load existing results for resume: {e}")
+
+    tasks_to_run = []
+    final_results_placeholder = [None] * len(dataset)
+
+    for idx, item in enumerate(dataset):
+        task_id = item["task_id"]
+        question = item["Question"]
+        expected = item.get("Final answer", "")
+        level = item["Level"]
+        file_name = item.get("file_name", "") or ""
+
+        # Check if we can resume this task
+        if task_id in existing_results:
+            final_results_placeholder[idx] = existing_results[task_id]
+            continue
+
+        # Resolve file attachment path
+        file_path = None
+        if file_name:
+            candidate = os.path.join(data_dir, item.get("file_path", ""))
+            if os.path.isfile(candidate):
+                file_path = candidate
+
+        prompt = _build_prompt(question, file_path)
+        tasks_to_run.append((task_id, question, expected, level, file_name, prompt, idx))
+
+    logger.info(
+        f"Skipping {len(dataset) - len(tasks_to_run)} already completed tasks. "
+        f"Running {len(tasks_to_run)} tasks."
+    )
+
     results = []
+    if tasks_to_run:
+        async with httpx.AsyncClient() as client:
+            async def _process(task_id, question, expected, level, file_name, prompt, idx):
+                result_text, duration_ms, token_usage = await _call_agent(
+                    client, prompt, semaphore, agent_url, max_retries=max_retries
+                )
+                predicted = _extract_final_answer(result_text)
+                correct = score(predicted, expected)
 
-    async with httpx.AsyncClient() as client:
-        tasks = []
-        for item in dataset:
-            task_id = item["task_id"]
-            question = item["Question"]
-            expected = item.get("Final answer", "")
-            level = item["Level"]
-            file_name = item.get("file_name", "") or ""
+                record = {
+                    "task_id": task_id,
+                    "level": level,
+                    "question": question[:200],
+                    "file_name": file_name,
+                    "expected": expected,
+                    "predicted": predicted,
+                    "score": correct,
+                    "duration_ms": round(duration_ms, 2),
+                    **token_usage,
+                }
 
-            # Resolve file attachment path
-            file_path = None
-            if file_name:
-                candidate = os.path.join(data_dir, item.get("file_path", ""))
-                if os.path.isfile(candidate):
-                    file_path = candidate
+                status = "CORRECT" if correct else "WRONG"
+                logger.info(
+                    f"[{status}] Level {level} | expected={expected!r} | "
+                    f"predicted={predicted!r} | {duration_ms:.0f}ms"
+                )
+                return record, idx
 
-            prompt = _build_prompt(question, file_path)
-            tasks.append((task_id, question, expected, level, file_name, prompt))
+            coros = [
+                _process(tid, q, exp, lvl, fn, p, idx)
+                for tid, q, exp, lvl, fn, p, idx in tasks_to_run
+            ]
+            new_results_with_idx = await asyncio.gather(*coros)
+            for record, idx in new_results_with_idx:
+                final_results_placeholder[idx] = record
 
-        async def _process(task_id, question, expected, level, file_name, prompt):
-            result_text, duration_ms, token_usage = await _call_agent(client, prompt, semaphore, agent_url)
-            predicted = _extract_final_answer(result_text)
-            correct = score(predicted, expected)
-
-            record = {
-                "task_id": task_id,
-                "level": level,
-                "question": question[:200],
-                "file_name": file_name,
-                "expected": expected,
-                "predicted": predicted,
-                "score": correct,
-                "duration_ms": round(duration_ms, 2),
-                **token_usage,
-            }
-
-            status = "CORRECT" if correct else "WRONG"
-            logger.info(
-                f"[{status}] Level {level} | expected={expected!r} | "
-                f"predicted={predicted!r} | {duration_ms:.0f}ms"
-            )
-            return record
-
-        coros = [
-            _process(tid, q, exp, lvl, fn, p)
-            for tid, q, exp, lvl, fn, p in tasks
-        ]
-        results = await asyncio.gather(*coros)
+    results = [r for r in final_results_placeholder if r is not None]
 
     # ── Write per-question results ───────────────────────────────────────
     with open(results_path, "w") as f:
@@ -459,6 +553,8 @@ def main():
     parser.add_argument("--quantization", type=str, default=None, help="Quantization config")
     parser.add_argument("--agent-mode", type=str, default=None, help="Agent mode (single-agent|planner-only|planner-executor)")
     parser.add_argument("--max-concurrent", type=int, default=None, help="Max concurrent requests")
+    parser.add_argument("--max-retries", type=int, default=None, help="Max retries for transient errors")
+    parser.add_argument("--resume", action="store_true", help="Resume from existing results.jsonl (skipping successful tasks)")
     args = parser.parse_args()
     asyncio.run(run_evaluation(args))
 
