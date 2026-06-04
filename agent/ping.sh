@@ -44,11 +44,14 @@ echo "${HEALTH_RESPONSE}"
 echo ""
 
 # --- Test: Agent run ---
-echo "=== POST /api/v1/agent/run ==="
+echo "=== POST /api/v1/agent/run (multipart with file) ==="
+TEST_FILE="ping_test_attachment.txt"
+echo "File attachment test message" > "${TEST_FILE}"
+
 start_ts=$(now_ms)
 AGENT_RESPONSE=$(curl -s --max-time 300 "${BASE_URL}/api/v1/agent/run" \
-    -H "Content-Type: application/json" \
-    -d '{"task": "Use web_search, visit_webpage, python_execute, read_document tools. I need to check if you can use the tools. Make sure to use all the tools at least once."}')
+    -F "task=Use web_search, visit_webpage, python_execute, and read_document tools. I need to check if you can use all these tools. For read_document, read the attached ping_test_attachment.txt. Make sure to use all the tools at least once." \
+    -F "file=@${TEST_FILE}")
 end_ts=$(now_ms)
 
 echo "${AGENT_RESPONSE}" | head -c 2000
@@ -56,6 +59,9 @@ elapsed_ms=$((end_ts - start_ts))
 echo ""
 echo ""
 echo "E2E latency (agent run): ${elapsed_ms} ms"
+
+# Clean up local file
+rm -f "${TEST_FILE}"
 
 echo ""
 echo "Tests complete."

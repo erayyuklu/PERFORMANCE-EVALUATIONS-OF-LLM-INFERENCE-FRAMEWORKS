@@ -79,8 +79,9 @@ def flush_langfuse():
     """Flush any buffered Langfuse events to the server."""
     if _handler is not None:
         try:
-            import langfuse
-            langfuse.flush()
+            from langfuse import get_client
+
+            get_client().flush()
         except Exception as exc:
             logger.warning(f"[observability] Langfuse flush failed: {exc}")
 
@@ -89,9 +90,10 @@ def shutdown_langfuse():
     """Flush and shut down the Langfuse client cleanly."""
     if _handler is not None:
         try:
-            import langfuse
-            langfuse.flush()
-            langfuse.shutdown()
+            from langfuse import get_client
+
+            get_client().flush()
+            get_client().shutdown()
             logger.info("[observability] Langfuse shut down cleanly.")
         except Exception as exc:
             logger.warning(f"[observability] Langfuse shutdown error: {exc}")

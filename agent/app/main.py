@@ -13,12 +13,14 @@ for stateful conversations via the checkpointer).
 """
 
 import logging
+import os
+import shutil
 import sys
 import time
 import uuid
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, BackgroundTasks
 from langchain_core.messages import AIMessage, ToolMessage, SystemMessage
 
 from .config import settings
@@ -93,14 +95,69 @@ async def health():
     return {"status": "ok"}
 
 
+def _cleanup_uploads(thread_id: str):
+    """Delete the upload directory for the given thread_id."""
+    upload_dir = os.path.join("uploads", thread_id)
+    if os.path.exists(upload_dir):
+        try:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            logger.info(f"Cleaned up uploads for thread: {thread_id}")
+        except Exception as e:
+            logger.warning(f"Error cleaning up uploads for thread {thread_id}: {e}")
+
+
 @app.post("/api/v1/agent/run", response_model=AgentResponse)
-async def run_agent(request: AgentRequest):
+async def run_agent(
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     """
     Execute a task through the LangGraph agent.
 
     The agent will reason about the task, optionally call tools, and return
     the final result. The entire execution is measured end-to-end.
     """
+    content_type = request.headers.get("content-type", "")
+
+    task = ""
+    session_id = None
+    file_bytes = None
+    file_name = None
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        task = form.get("task", "")
+        if not isinstance(task, str):
+            task = str(task)
+        session_id = form.get("session_id")
+        if session_id is not None and not isinstance(session_id, str):
+            session_id = str(session_id)
+        file_obj = form.get("file")
+        if file_obj and hasattr(file_obj, "filename") and file_obj.filename:
+            file_name = file_obj.filename
+            file_bytes = await file_obj.read()
+    else:
+        # Fallback to JSON
+        try:
+            body = await request.json()
+            task = body.get("task", "")
+            session_id = body.get("session_id")
+        except Exception:
+            pass
+
+    # Use session_id for checkpointed conversations, or generate a fresh one
+    thread_id = session_id or str(uuid.uuid4())
+
+    # Save uploaded file if present
+    if file_bytes and file_name:
+        upload_dir = os.path.join("uploads", thread_id)
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, file_name)
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+        # Register cleanup background task
+        background_tasks.add_task(_cleanup_uploads, thread_id)
+
     graph = app.state.graph
     t_start = time.perf_counter()
 
@@ -113,13 +170,11 @@ async def run_agent(request: AgentRequest):
         callbacks.append(handler)
     config["callbacks"] = callbacks
 
-    # Use session_id for checkpointed conversations, or generate a fresh one
-    thread_id = request.session_id or str(uuid.uuid4())
     config["configurable"] = {"thread_id": thread_id}
 
     # Invoke the graph
     result = await graph.ainvoke(
-        {"messages": [("user", request.task)]},
+        {"messages": [("user", task)]},
         config=config,
     )
 
@@ -170,7 +225,7 @@ async def run_agent(request: AgentRequest):
             break
 
     return AgentResponse(
-        task=request.task,
+        task=task,
         result=result_text,
         plan=plan_text,
         steps=steps,

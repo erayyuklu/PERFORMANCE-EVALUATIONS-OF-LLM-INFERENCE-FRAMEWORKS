@@ -14,6 +14,7 @@ import re
 
 import httpx
 from langchain_core.tools import tool
+from langchain_core.runnables import RunnableConfig
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +77,28 @@ async def visit_webpage(url: str) -> str:
 
 
 @tool
-async def python_execute(code: str) -> str:
+async def python_execute(code: str, config: RunnableConfig = None) -> str:
     """Execute Python code in a secure cloud sandbox. Returns stdout and stderr."""
     from e2b_code_interpreter import AsyncSandbox
 
     try:
         sandbox = await AsyncSandbox.create()
+
+        # Upload any files uploaded for this request session to the sandbox
+        if config and "configurable" in config:
+            thread_id = config["configurable"].get("thread_id")
+            if thread_id:
+                upload_dir = os.path.join("uploads", thread_id)
+                if os.path.isdir(upload_dir):
+                    for fname in os.listdir(upload_dir):
+                        fpath = os.path.join(upload_dir, fname)
+                        if os.path.isfile(fpath):
+                            try:
+                                with open(fpath, "rb") as f:
+                                    await sandbox.files.write(f"/home/user/{fname}", f.read())
+                            except Exception as e:
+                                logger.warning(f"Failed to write file {fname} to E2B sandbox: {e}")
+
         execution = await sandbox.run_code(code)
         await sandbox.kill()
 
@@ -102,18 +119,27 @@ async def python_execute(code: str) -> str:
 
 
 @tool
-async def read_document(file_path: str) -> str:
+async def read_document(file_path: str, config: RunnableConfig = None) -> str:
     """Read a local file and return its text content. Supports PDF, Excel, CSV, and plain text."""
-    if not os.path.isfile(file_path):
+    resolved_path = file_path
+    if config and "configurable" in config:
+        thread_id = config["configurable"].get("thread_id")
+        if thread_id:
+            fname = os.path.basename(file_path)
+            candidate = os.path.join("uploads", thread_id, fname)
+            if os.path.isfile(candidate):
+                resolved_path = candidate
+
+    if not os.path.isfile(resolved_path):
         return f"File not found: {file_path}"
 
-    ext = os.path.splitext(file_path)[1].lower()
+    ext = os.path.splitext(resolved_path)[1].lower()
 
     try:
         if ext == ".pdf":
             import pymupdf
 
-            doc = pymupdf.open(file_path)
+            doc = pymupdf.open(resolved_path)
             pages = [page.get_text() for page in doc]
             doc.close()
             return "\n\n".join(pages).strip() or "(empty PDF)"
@@ -121,7 +147,7 @@ async def read_document(file_path: str) -> str:
         if ext in (".xlsx", ".xls"):
             from openpyxl import load_workbook
 
-            wb = load_workbook(file_path, read_only=True, data_only=True)
+            wb = load_workbook(resolved_path, read_only=True, data_only=True)
             parts = []
             for sheet_name in wb.sheetnames:
                 ws = wb[sheet_name]
@@ -133,13 +159,13 @@ async def read_document(file_path: str) -> str:
             return "\n\n".join(parts).strip() or "(empty spreadsheet)"
 
         if ext == ".csv":
-            with open(file_path, newline="", encoding="utf-8", errors="replace") as f:
+            with open(resolved_path, newline="", encoding="utf-8", errors="replace") as f:
                 reader = csv.reader(f)
                 rows = ["\t".join(row) for row in reader]
             return "\n".join(rows).strip() or "(empty CSV)"
 
         # Default: plain text (txt, py, json, md, etc.)
-        with open(file_path, encoding="utf-8", errors="replace") as f:
+        with open(resolved_path, encoding="utf-8", errors="replace") as f:
             content = f.read()
         return content.strip() or "(empty file)"
 

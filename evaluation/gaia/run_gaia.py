@@ -114,97 +114,13 @@ GAIA_PROMPT_PREFIX = (
     "Do not include any explanation after the FINAL ANSWER line.\n\n"
 )
 
-# File-type extensions we can inline as plain text
-TEXT_EXTENSIONS = {
-    ".txt", ".csv", ".tsv", ".json", ".jsonl", ".md", ".py", ".js",
-    ".html", ".xml", ".yaml", ".yml", ".log", ".sql", ".r", ".sh",
-}
-
-# Extensions we cannot extract text from
-UNSUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".mp3", ".wav", ".mp4", ".mov"}
-
-
-def _extract_file_content(file_path: str) -> str | None:
-    """Extract text content from a file locally. Returns None if unsupported."""
-    ext = os.path.splitext(file_path)[1].lower()
-
-    if ext in TEXT_EXTENSIONS:
-        return Path(file_path).read_text(errors="replace")
-
-    if ext == ".pdf":
-        import pymupdf
-        doc = pymupdf.open(file_path)
-        pages = [page.get_text() for page in doc]
-        doc.close()
-        return "\n\n".join(pages).strip() or None
-
-    if ext in (".xlsx", ".xls"):
-        from openpyxl import load_workbook
-        wb = load_workbook(file_path, read_only=True, data_only=True)
-        parts = []
-        for sheet_name in wb.sheetnames:
-            ws = wb[sheet_name]
-            rows = []
-            for row in ws.iter_rows(values_only=True):
-                rows.append("\t".join(str(c) if c is not None else "" for c in row))
-            parts.append(f"=== Sheet: {sheet_name} ===\n" + "\n".join(rows))
-        wb.close()
-        return "\n\n".join(parts).strip() or None
-
-    if ext == ".docx":
-        from docx import Document
-        doc = Document(file_path)
-        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-        # Also extract tables
-        for table in doc.tables:
-            for row in table.rows:
-                paragraphs.append("\t".join(cell.text for cell in row.cells))
-        return "\n".join(paragraphs).strip() or None
-
-    if ext == ".pptx":
-        from pptx import Presentation
-        prs = Presentation(file_path)
-        slides = []
-        for i, slide in enumerate(prs.slides, 1):
-            texts = []
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    texts.append(shape.text_frame.text)
-                if shape.has_table:
-                    for row in shape.table.rows:
-                        texts.append("\t".join(cell.text for cell in row.cells))
-            if texts:
-                slides.append(f"=== Slide {i} ===\n" + "\n".join(texts))
-        return "\n\n".join(slides).strip() or None
-
-    return None
-
-
 def _build_prompt(question: str, file_path: str | None) -> str:
-    """Wrap a GAIA question with instructions and optional file content."""
+    """Wrap a GAIA question with instructions and optional file details (without inlining)."""
     parts = [GAIA_PROMPT_PREFIX]
 
     if file_path and os.path.isfile(file_path):
         fname = os.path.basename(file_path)
-        ext = os.path.splitext(file_path)[1].lower()
-
-        if ext in UNSUPPORTED_EXTENSIONS:
-            parts.append(
-                f"[Attached file: {fname} — this is a {ext} file whose content "
-                "cannot be provided as text.]\n\n"
-            )
-        else:
-            try:
-                content = _extract_file_content(file_path)
-                if content:
-                    parts.append(
-                        f"The following file is attached: {fname}\n"
-                        f"--- FILE CONTENT ---\n{content}\n--- END FILE ---\n\n"
-                    )
-                else:
-                    parts.append(f"[Attached file: {fname} — extracted no content.]\n\n")
-            except Exception as exc:
-                parts.append(f"[Attached file: {fname} — could not read: {exc}]\n\n")
+        parts.append(f"The following file is attached: {fname}\n\n")
 
     parts.append(f"Question: {question}")
     return "".join(parts)
@@ -228,6 +144,7 @@ def _extract_final_answer(text: str) -> str:
 async def _call_agent(
     client: httpx.AsyncClient,
     task: str,
+    file_path: str | None,
     semaphore: asyncio.Semaphore,
     agent_url: str,
     max_retries: int = 3,
@@ -240,11 +157,23 @@ async def _call_agent(
             t0 = time.perf_counter()
             error_msg = None
             try:
-                resp = await client.post(
-                    f"{agent_url}/api/v1/agent/run",
-                    json={"task": task},
-                    timeout=REQUEST_TIMEOUT,
-                )
+                if file_path and os.path.isfile(file_path):
+                    with open(file_path, "rb") as f:
+                        file_bytes = f.read()
+                    files = {"file": (os.path.basename(file_path), file_bytes)}
+                    data = {"task": task}
+                    resp = await client.post(
+                        f"{agent_url}/api/v1/agent/run",
+                        data=data,
+                        files=files,
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                else:
+                    resp = await client.post(
+                        f"{agent_url}/api/v1/agent/run",
+                        json={"task": task},
+                        timeout=REQUEST_TIMEOUT,
+                    )
                 
                 # Check status code
                 if resp.status_code >= 400:
@@ -404,7 +333,7 @@ async def run_evaluation(args: argparse.Namespace):
                 file_path = candidate
 
         prompt = _build_prompt(question, file_path)
-        tasks_to_run.append((task_id, question, expected, level, file_name, prompt, idx))
+        tasks_to_run.append((task_id, question, expected, level, file_name, file_path, prompt, idx))
 
     logger.info(
         f"Skipping {len(dataset) - len(tasks_to_run)} already completed tasks. "
@@ -414,9 +343,9 @@ async def run_evaluation(args: argparse.Namespace):
     results = []
     if tasks_to_run:
         async with httpx.AsyncClient() as client:
-            async def _process(task_id, question, expected, level, file_name, prompt, idx):
+            async def _process(task_id, question, expected, level, file_name, file_path, prompt, idx):
                 result_text, duration_ms, token_usage = await _call_agent(
-                    client, prompt, semaphore, agent_url, max_retries=max_retries
+                    client, prompt, file_path, semaphore, agent_url, max_retries=max_retries
                 )
                 predicted = _extract_final_answer(result_text)
                 correct = score(predicted, expected)
@@ -441,8 +370,8 @@ async def run_evaluation(args: argparse.Namespace):
                 return record, idx
 
             coros = [
-                _process(tid, q, exp, lvl, fn, p, idx)
-                for tid, q, exp, lvl, fn, p, idx in tasks_to_run
+                _process(tid, q, exp, lvl, fn, fp, p, idx)
+                for tid, q, exp, lvl, fn, fp, p, idx in tasks_to_run
             ]
             new_results_with_idx = await asyncio.gather(*coros)
             for record, idx in new_results_with_idx:
