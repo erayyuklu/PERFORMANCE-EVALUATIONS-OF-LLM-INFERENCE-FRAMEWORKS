@@ -164,6 +164,31 @@ async def read_document(file_path: str, config: RunnableConfig = None) -> str:
                 rows = ["\t".join(row) for row in reader]
             return "\n".join(rows).strip() or "(empty CSV)"
 
+        if ext == ".docx":
+            from docx import Document
+            doc = Document(resolved_path)
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    paragraphs.append("\t".join(cell.text for cell in row.cells))
+            return "\n".join(paragraphs).strip() or "(empty DOCX)"
+
+        if ext == ".pptx":
+            from pptx import Presentation
+            prs = Presentation(resolved_path)
+            slides = []
+            for i, slide in enumerate(prs.slides, 1):
+                texts = []
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        texts.append(shape.text_frame.text)
+                    if shape.has_table:
+                        for row in shape.table.rows:
+                            texts.append("\t".join(cell.text for cell in row.cells))
+                if texts:
+                    slides.append(f"=== Slide {i} ===\n" + "\n".join(texts))
+            return "\n\n".join(slides).strip() or "(empty PPTX)"
+
         # Default: plain text (txt, py, json, md, etc.)
         with open(resolved_path, encoding="utf-8", errors="replace") as f:
             content = f.read()

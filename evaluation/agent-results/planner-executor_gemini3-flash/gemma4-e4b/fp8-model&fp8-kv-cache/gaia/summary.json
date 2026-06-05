@@ -1,5 +1,5 @@
 {
-  "timestamp": "20260515_011945",
+  "timestamp": "20260605_014603",
   "model_family": "gemma4-e4b",
   "quantization": "fp8-model&fp8-kv-cache",
   "agent_mode": "planner-executor_gemini3-flash",
@@ -11,14 +11,22 @@
     1
   ],
   "total": 53,
-  "correct": 18,
-  "accuracy": 0.3396,
+  "correct": 24,
+  "accuracy": 0.4528,
   "per_level": {
     "level_1": {
       "total": 53,
-      "correct": 18,
-      "accuracy": 0.3396
+      "correct": 24,
+      "accuracy": 0.4528
     }
   },
-  "avg_duration_ms": 99171.11
+  "avg_duration_ms": 92956.54,
+  "total_planner_input_tokens": 17968,
+  "total_planner_output_tokens": 8929,
+  "total_executor_input_tokens": 647890,
+  "total_executor_output_tokens": 41497,
+  "avg_planner_input_tokens": 339.02,
+  "avg_planner_output_tokens": 168.47,
+  "avg_executor_input_tokens": 12224.34,
+  "avg_executor_output_tokens": 782.96
 }
