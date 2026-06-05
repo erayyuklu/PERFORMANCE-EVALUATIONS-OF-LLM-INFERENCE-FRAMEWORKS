@@ -1,5 +1,5 @@
 {
-  "timestamp": "20260514_213747",
+  "timestamp": "20260605_154142",
   "model_family": "gemma4-e4b",
   "quantization": "fp8-model&fp8-kv-cache",
   "agent_mode": "single-agent",
@@ -11,14 +11,22 @@
     1
   ],
   "total": 53,
-  "correct": 15,
-  "accuracy": 0.283,
+  "correct": 18,
+  "accuracy": 0.3396,
   "per_level": {
     "level_1": {
       "total": 53,
-      "correct": 15,
-      "accuracy": 0.283
+      "correct": 18,
+      "accuracy": 0.3396
     }
   },
-  "avg_duration_ms": 47000.62
+  "avg_duration_ms": 27273.46,
+  "total_planner_input_tokens": 0,
+  "total_planner_output_tokens": 0,
+  "total_executor_input_tokens": 530863,
+  "total_executor_output_tokens": 41056,
+  "avg_planner_input_tokens": 0.0,
+  "avg_planner_output_tokens": 0.0,
+  "avg_executor_input_tokens": 10016.28,
+  "avg_executor_output_tokens": 774.64
 }
