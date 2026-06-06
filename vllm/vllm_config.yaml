@@ -1,9 +1,10 @@
-model: google/gemma-4-E4B-it
+model: cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit
 reasoning-parser: gemma4
+quantization: compressed-tensors
 kv-cache-dtype: fp8
-quantization: fp8
+enable-chunked-prefill: true
 max-model-len: -1
-gpu-memory-utilization: 0.90
+gpu-memory-utilization: 0.95
 tensor-parallel-size: 1
 port: 8000
 enable-auto-tool-choice: true

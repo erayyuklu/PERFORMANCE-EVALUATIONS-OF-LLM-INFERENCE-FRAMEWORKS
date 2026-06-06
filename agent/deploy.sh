@@ -73,6 +73,7 @@ kubectl rollout status statefulset/agent-postgres -n "${NAMESPACE}" --timeout=12
 # Deploy agent application
 echo "==> Deploying Agent API..."
 sed -e "s/PROJECT_ID/${PROJECT_ID}/g" "${SCRIPT_DIR}/k8s/deployment.yaml" | kubectl apply -f -
+kubectl apply -f "${SCRIPT_DIR}/k8s/backend-config.yaml"
 kubectl apply -f "${SCRIPT_DIR}/k8s/service.yaml"
 kubectl apply -f "${SCRIPT_DIR}/k8s/hpa.yaml"
 kubectl apply -f "${SCRIPT_DIR}/k8s/service-monitor.yaml" || echo "    ⚠ ServiceMonitor CRD not found (monitoring stack not deployed yet?)"

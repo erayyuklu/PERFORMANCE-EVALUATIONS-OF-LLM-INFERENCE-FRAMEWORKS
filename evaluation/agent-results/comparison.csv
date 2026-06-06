@@ -1,0 +1,8 @@
+Metric;Planner-Only;Planner-Executor;Single-Agent
+Accuracy (%);73,58;45,28;33,96
+API Input Token;68034,17;339,02;0
+API Output Token;754,51;168,47;0
+vLLM Input Token;0;12224,34;10016,28
+vLLM Output Token;0;782,96;774,64
+Cost;0,036281;0,000675;0
+Duration (s);318,87;92,96;27,27

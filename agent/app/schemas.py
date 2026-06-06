@@ -8,8 +8,10 @@ from typing import Optional, List
 
 class Plan(BaseModel):
     approach: str
+    steps: List[str]
     tools_to_use: List[str]
-    key_facts_to_lookup: List[str]
+    expected_answer_format: str
+    verification_strategy: str
 
 
 class AgentRequest(BaseModel):
