@@ -26,29 +26,59 @@ from .schemas import Plan
 logger = logging.getLogger(__name__)
 
 
-def _create_planner_llm() -> ChatVertexAI:
-    """External API LLM for planning (Gemini via Vertex AI)."""
-    return ChatVertexAI(
-        model=settings.PLANNER_MODEL_NAME,
-        project=settings.GCP_PROJECT_ID,
-        location=settings.GCP_LOCATION,
-        temperature=settings.PLANNER_TEMPERATURE,
-    )
+def _create_planner_llm() -> ChatVertexAI | ChatOpenAI:
+    """Create the planner LLM depending on the mode."""
+    if settings.MODE == "small-planner-executor":
+        # Uses the small self-hosted model
+        logger.info(
+            f"[graph] Planner LLM configured (small): model={settings.VLLM_MODEL_NAME}, "
+            f"base_url={settings.VLLM_BASE_URL}"
+        )
+        return ChatOpenAI(
+            model=settings.VLLM_MODEL_NAME,
+            openai_api_base=settings.VLLM_BASE_URL,
+            openai_api_key="not-needed",  # vLLM doesn't require an API key
+            temperature=settings.PLANNER_TEMPERATURE,
+            max_tokens=settings.MAX_TOKENS,
+        )
+    else:
+        # Default planner uses ChatVertexAI (Gemini)
+        logger.info(
+            f"[graph] Planner LLM configured (large/default): model={settings.PLANNER_MODEL_NAME}"
+        )
+        return ChatVertexAI(
+            model=settings.PLANNER_MODEL_NAME,
+            project=settings.GCP_PROJECT_ID,
+            location=settings.GCP_LOCATION,
+            temperature=settings.PLANNER_TEMPERATURE,
+        )
 
-def _create_executor_llm() -> ChatOpenAI:
-    """Self-hosted vLLM LLM for execution (Qwen3-8B)."""
-    llm = ChatOpenAI(
-        model=settings.VLLM_MODEL_NAME,
-        openai_api_base=settings.VLLM_BASE_URL,
-        openai_api_key="not-needed",  # vLLM doesn't require an API key
-        temperature=settings.TEMPERATURE,
-        max_tokens=settings.MAX_TOKENS,
-    )
-    logger.info(
-        f"[graph] Executor LLM configured: model={settings.VLLM_MODEL_NAME}, "
-        f"base_url={settings.VLLM_BASE_URL}"
-    )
-    return llm
+def _create_executor_llm() -> ChatOpenAI | ChatVertexAI:
+    """Create the executor LLM depending on the mode."""
+    if settings.MODE == "large-planner-executor":
+        # Uses the large model (Gemini)
+        logger.info(
+            f"[graph] Executor LLM configured (large): model={settings.PLANNER_MODEL_NAME}"
+        )
+        return ChatVertexAI(
+            model=settings.PLANNER_MODEL_NAME,
+            project=settings.GCP_PROJECT_ID,
+            location=settings.GCP_LOCATION,
+            temperature=settings.TEMPERATURE,
+        )
+    else:
+        # Default/small executor uses ChatOpenAI pointing to the self-hosted vLLM backend
+        logger.info(
+            f"[graph] Executor LLM configured (small/default): model={settings.VLLM_MODEL_NAME}, "
+            f"base_url={settings.VLLM_BASE_URL}"
+        )
+        return ChatOpenAI(
+            model=settings.VLLM_MODEL_NAME,
+            openai_api_base=settings.VLLM_BASE_URL,
+            openai_api_key="not-needed",  # vLLM doesn't require an API key
+            temperature=settings.TEMPERATURE,
+            max_tokens=settings.MAX_TOKENS,
+        )
 
 def _build_tool_description(tools) -> str:
     """Build a formatted list of tool names and descriptions."""
@@ -147,7 +177,7 @@ def create_agent_graph(checkpointer=None):
         logger.info("[graph] Planner-only ReAct graph compiled successfully.")
         return graph
 
-    elif settings.MODE == "planner-executor":
+    elif settings.MODE in ("planner-executor", "small-planner-executor", "large-planner-executor"):
         executor_llm = _create_executor_llm()
         def _executor_prompt(state: MessagesState) -> list:
             # OpenAI-compatible APIs require SystemMessages to precede HumanMessages.
@@ -171,7 +201,7 @@ def create_agent_graph(checkpointer=None):
         workflow.add_edge("executor", END)
         
         graph = workflow.compile(checkpointer=checkpointer)
-        logger.info("[graph] Planner-Executor graph compiled successfully.")
+        logger.info(f"[graph] {settings.MODE} graph compiled successfully.")
         return graph
 
     else:

@@ -8,8 +8,8 @@ import os
 class Settings:
     """Settings loaded from environment variables with sensible defaults."""
 
-    # Architecture Flag: "single-agent", "planner-executor", or "planner-only"
-    MODE: str = os.getenv("MODE", "single-agent").lower()
+    # Architecture Flag: "single-agent", "planner-executor", "planner-only", "small-planner-executor", or "large-planner-executor"
+    MODE: str = os.getenv("MODE", "single-agent").lower().replace(" ", "-")
 
     # Planner (external API)
     PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "gemini-3-flash-preview")

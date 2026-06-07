@@ -1,0 +1,32 @@
+{
+  "timestamp": "20260607_142958",
+  "model_family": "gemma4-26b-a4b",
+  "quantization": "awq-4bit-model&fp8-kv-cache",
+  "agent_mode": "large-planner-executor",
+  "agent_url": "http://35.198.71.166:80",
+  "dataset": "gaia-benchmark/GAIA",
+  "config": "2023_all",
+  "split": "validation",
+  "levels": [
+    1
+  ],
+  "total": 53,
+  "correct": 45,
+  "accuracy": 0.8491,
+  "per_level": {
+    "level_1": {
+      "total": 53,
+      "correct": 45,
+      "accuracy": 0.8491
+    }
+  },
+  "avg_duration_ms": 356448.89,
+  "total_planner_input_tokens": 32277,
+  "total_planner_output_tokens": 15414,
+  "total_executor_input_tokens": 12112235,
+  "total_executor_output_tokens": 93241,
+  "avg_planner_input_tokens": 609.0,
+  "avg_planner_output_tokens": 290.83,
+  "avg_executor_input_tokens": 228532.74,
+  "avg_executor_output_tokens": 1759.26
+}
