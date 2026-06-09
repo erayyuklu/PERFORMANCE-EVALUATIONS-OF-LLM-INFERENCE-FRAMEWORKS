@@ -218,33 +218,33 @@ def figure2_kv_precision_sweetspot():
     worst = tpot.max()
 
     x = np.arange(len(spectrum))
-    fig, ax = plt.subplots(figsize=(10.5, 6.2))
+    fig, ax = plt.subplots(figsize=(13.5, 6.4))
 
-    bars = ax.bar(x, tpot, width=0.66, color=colors,
+    bars = ax.bar(x, tpot, width=0.58, color=colors,
                   edgecolor="white", linewidth=1.6, zorder=3)
 
     # FP8 reference line -- the floor everyone is compared against
     ax.axhline(fp8_tpot, color=WIN, lw=1.6, ls=(0, (5, 4)), zorder=2)
-    ax.text(len(spectrum) - 0.4, fp8_tpot - 7, "FP8 floor",
-            color=WIN, fontsize=12, fontweight="bold", ha="right", va="top")
+    ax.text(len(spectrum) - 0.55, fp8_tpot + 3, "FP8 floor",
+            color=WIN, fontsize=11.5, fontweight="bold", ha="left", va="bottom")
 
     # Value labels (ms/token) + multiplier vs FP8 for the slow configs
     for xi, (h, r) in zip(x, zip(tpot, role)):
-        ax.text(xi, h + 3, f"{h:.0f}", ha="center", va="bottom",
+        ax.text(xi, h + 5, f"{h:.0f}", ha="center", va="bottom",
                 fontsize=14, fontweight="bold",
                 color=role_color[r])
         if r == "loss":
-            ax.text(xi, h - 9, f"{h / fp8_tpot:.1f}×", ha="center", va="top",
+            ax.text(xi, h - 12, f"{h / fp8_tpot:.1f}×", ha="center", va="top",
                     fontsize=12, fontweight="bold", color="white")
 
-    # "best" tag on FP8
+    # "best" tag on FP8 -- positioned above and between FP8 and FP16 bars
     win_i = role.index("win")
     ax.annotate("fastest decode\n= the sweet spot",
                 xy=(win_i, tpot[win_i]),
-                xytext=(win_i + 0.05, tpot[win_i] + 46),
+                xytext=(win_i - 0.5, tpot[win_i] + 62),
                 fontsize=13, fontweight="bold", color=WIN, ha="center",
                 arrowprops=dict(arrowstyle="-|>", color=WIN, lw=2.2,
-                                connectionstyle="arc3,rad=0.15"))
+                                connectionstyle="arc3,rad=0.25"))
 
     ax.set_ylabel("Decode latency  (ms / token)\nat 64 concurrent users",
                   fontsize=15, fontweight="semibold", labelpad=8)
@@ -256,16 +256,16 @@ def figure2_kv_precision_sweetspot():
             transform=ax.transAxes, fontsize=12.5, color=MUTED)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=12.5)
-    ax.set_ylim(0, worst * 1.30)
+    ax.set_xticklabels(labels, fontsize=12)
+    ax.set_ylim(0, worst * 1.35)
     ax.grid(True, axis="y", color=GRID, lw=1.0, zorder=0)
     ax.set_axisbelow(True)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
 
-    # Takeaway callout
+    # Takeaway callout (upper-right)
     ax.text(
-        0.97, 0.93,
+        0.97, 0.95,
         f"Going past FP8 makes decoding\nup to {worst / fp8_tpot:.1f}× slower"
         f"\n— for no accuracy gain.",
         transform=ax.transAxes, fontsize=12.8, color=LOSS, ha="right", va="top",
@@ -274,7 +274,26 @@ def figure2_kv_precision_sweetspot():
                   edgecolor=LOSS, linewidth=1.6),
     )
 
+    # Throughput context box (lower-left)
+    df_uni = pd.read_csv(RESULTS / "unified_summary_qwen3.csv")
+    fp8_tp = float(df_uni.loc[
+        (df_uni.experiment == "qwen3_kv_cache_fp8") & (df_uni.users == USERS),
+        "gen_throughput_mean"].iloc[0])
+    fp16_tp = float(df_uni.loc[
+        (df_uni.experiment == "qwen3_kv_cache_auto") & (df_uni.users == USERS),
+        "gen_throughput_mean"].iloc[0])
+    tp_txt = (f"Throughput\n"
+              f"FP8  {fp8_tp:.0f} tok/s   vs   FP16  {fp16_tp:.0f} tok/s\n"
+              f"(+{(fp8_tp / fp16_tp - 1) * 100:.0f}% with FP8)")
+    ax.text(
+        1.02, 0.58, tp_txt, transform=ax.transAxes,
+        fontsize=11.5, fontweight="bold", color=ACCENT, ha="left", va="center",
+        bbox=dict(boxstyle="round,pad=0.7", facecolor="#eef3fc",
+                  edgecolor=ACCENT, linewidth=1.6),
+    )
+
     fig.tight_layout()
+    fig.subplots_adjust(right=0.74)
     _save(fig, "phase1_fig2_kv_precision_sweetspot")
     plt.close(fig)
 
