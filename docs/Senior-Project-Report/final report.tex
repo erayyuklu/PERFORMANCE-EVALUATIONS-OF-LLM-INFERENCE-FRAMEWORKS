@@ -1,0 +1,926 @@
+\documentclass[a4paper,12pt]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm, headheight=15pt}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage[bottom]{footmisc}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\labelenumi}{(\roman{enumi})}
+
+\graphicspath{{figures/}}
+
+\begin{document}
+
+% ---- Title Page ----
+\begin{titlepage}
+\begin{center}
+\vspace*{2cm}
+{\Large \textbf{BO\u{G}AZI\c{C}I UNIVERSITY}}\\[0.4cm]
+{\large INSTITUTE FOR GRADUATE STUDIES IN SCIENCE AND ENGINEERING}\\[2cm]
+{\LARGE \textbf{PERFORMANCE EVALUATIONS OF}}\\[0.3cm]
+{\LARGE \textbf{LLM INFERENCE FRAMEWORKS}}\\[2cm]
+{\large CMPE 492 --- Senior Design Project}\\[2cm]
+{\large \textbf{Eray Y\"{u}kl\"{u}}}\\[0.2cm]
+{\large \textbf{S\"{u}leyman Tolga Acar}}\\[2cm]
+{\large Advisor:}\\[0.2cm]
+{\large \textbf{Bahri Atay \"{O}zg\"{o}vde}}\\[3cm]
+{\large 2026}
+\end{center}
+\end{titlepage}
+\pagenumbering{roman}
+\tableofcontents
+
+% ============================================================
+\chapter{INTRODUCTION}
+% ============================================================
+\pagenumbering{arabic}
+
+\section{Motivation and Background}
+
+Large Language Models (LLMs) have rapidly become central to a wide range of applications, from interactive chatbots and code assistants to scientific research tools and enterprise automation platforms. As demand for LLM-powered services grows, the cost and latency of serving these models at scale have become critical engineering concerns. A single inference request to a modern 7-billion-parameter model can consume hundreds of milliseconds of GPU compute time, and serving thousands of concurrent users demands careful optimization of both hardware utilization and serving software configuration.
+
+vLLM~\cite{kwon2023efficient} is an open-source, high-throughput inference engine purpose-built for LLMs. It introduced PagedAttention, a memory management technique inspired by operating system virtual memory paging, which dramatically reduces GPU memory fragmentation and enables significantly more concurrent requests per GPU compared to earlier approaches. Beyond memory management, vLLM exposes a rich set of tunable parameters governing scheduling, batching, quantization, and caching---each of which can substantially alter the throughput--latency trade-off of the serving system.
+
+Despite vLLM's widespread adoption, systematic empirical studies that isolate and quantify the effect of individual configuration parameters under realistic multi-user loads remain relatively scarce. Most published benchmarks focus on throughput at a single concurrency level, or on quantization accuracy, but do not jointly analyze latency distributions, cost efficiency, GPU resource utilization, and model quality across a comprehensive parameter matrix.
+
+This project addresses that gap by designing, executing, and analyzing a rigorous, repeatable benchmarking campaign for vLLM on commodity cloud GPU hardware.
+
+\section{Project Goals}
+
+The primary goals of this project are:
+
+\begin{enumerate}
+    \item Deploy vLLM on cloud GPU infrastructure (Google Kubernetes Engine and Lightning AI) in a reproducible and automatable manner.
+    \item Design a comprehensive set of benchmark experiments covering vLLM server-side parameters, quantization methods, model types, and input/output profiles.
+    \item Measure a rich set of latency, throughput, resource utilization, and model quality metrics for each configuration.
+    \item Identify which configurations lie on the Pareto frontier of the throughput--latency--cost--quality trade-off space.
+    \item Produce actionable recommendations for practitioners deploying LLMs on commodity cloud GPUs.
+\end{enumerate}
+
+\section{Broad Impact}
+
+The findings of this project have direct practical relevance for any organization deploying LLMs on cloud infrastructure. By quantifying the precise trade-offs associated with FP8 quantization, INT4 quantization, chunked prefill, prefix caching, and batch-size tuning, this work helps practitioners make informed decisions that can reduce serving costs by up to 7$\times$ without sacrificing response quality. Reducing GPU energy consumption and cloud costs per inference request also has positive environmental and economic implications as LLM serving continues to scale globally.
+
+Furthermore, the open-source benchmarking pipeline developed in this project---comprising a parameterized experiment runner, a Locust-based load generator with SSE streaming support, GPU and vLLM telemetry collectors, and a Jupyter analysis notebook---can be reused and extended by the research community for evaluating other inference engines, models, and hardware platforms.
+
+\section{Ethical Considerations}
+
+The project uses only publicly available model weights (DeepSeek-R1-Distill-Qwen-7B and Qwen2.5-7B-Instruct, both under open research licenses) and publicly available benchmark datasets (ShareGPT, ARC-Challenge, MMLU, GSM8K). No private user data was collected or processed. All experiments were conducted on cloud infrastructure with standard access controls. Cost overruns were guarded against by a GCP budget alert system with an automatic billing-disable Cloud Function. The evaluation benchmarks (ARC-Challenge, MMLU, GSM8K) are well-established academic datasets, and no benchmark contamination was introduced because the models were not fine-tuned during the study.
+
+% ============================================================
+\chapter{PROJECT DEFINITION AND PLANNING}
+% ============================================================
+
+\section{Project Definition}
+
+This project systematically evaluates the performance of vLLM, an open-source LLM inference engine, across a range of configuration parameters and model variants. The study centers on two 7-billion-parameter models---a reasoning model (DeepSeek-R1-Distill-Qwen-7B) and a non-reasoning model (Qwen2.5-7B-Instruct)---served on NVIDIA L4 GPUs (24 GB VRAM) hosted on Google Cloud Platform (GCP) and Lightning AI.
+
+The benchmarking pipeline is fully automated: a shell-script experiment runner iterates over a JSON-defined experiment matrix, restarts vLLM with new parameters for each experiment, triggers Locust load tests, collects per-request latency metrics via Server-Sent Events (SSE) parsing, captures GPU and vLLM telemetry, and stores all results as CSV files for offline analysis. A Jupyter notebook then performs statistical analysis and produces plots covering latency distributions, throughput, cost efficiency, GPU utilization, KV cache behavior, and model quality.
+
+Four experiment campaigns were defined:
+
+\begin{enumerate}
+    \item \textbf{Quantization --- Reasoning Model}: FP16 baseline, FP8, and BitsAndBytes (INT4) quantization on DeepSeek-R1.
+    \item \textbf{Quantization --- Non-Reasoning Model}: FP16 baseline and FP8 on Qwen2.5-7B-Instruct.
+    \item \textbf{I/O Profiles}: Six prompt categories (all, coding-only, creative-only, reasoning-only, short-input, long-input) to isolate the effect of input/output length on latency.
+    \item \textbf{Server Tuning (Pilot)}: A preliminary sweep of vLLM scheduler parameters including \texttt{max-num-seqs}, \texttt{gpu-memory-utilization}, \texttt{enable-chunked-prefill}, and \texttt{enable-prefix-caching}.
+\end{enumerate}
+
+\section{Project Planning}
+
+\subsection{Project Time and Resource Estimation}
+
+The project spanned approximately 14 weeks and proceeded in three major phases:
+
+\begin{itemize}
+    \item \textbf{Weeks 1--3}: Infrastructure setup (GKE cluster, vLLM deployment, Locust deployment, Prometheus + Grafana monitoring). Literature review of vLLM, PagedAttention, quantization methods, and LLM serving benchmarks.
+    \item \textbf{Weeks 4--8}: Pilot experiments on Lightning AI (server tuning parameter sweep, prefix caching study). Development and refinement of the automated experiment runner, Locust streaming client, GPU monitor, and analysis notebook.
+    \item \textbf{Weeks 9--14}: Full experiment campaigns on GCP (quantization, I/O profiles). Quality evaluation using lm-evaluation-harness. Data analysis, visualization, and report writing.
+\end{itemize}
+
+GPU compute costs were managed through a GCP budget alert ($12{,}500$ TRY limit) connected to a Pub/Sub topic and a Cloud Function that automatically disables billing when the threshold is reached.
+
+\subsection{Success Criteria}
+
+The project was considered successful upon meeting the following criteria:
+
+\begin{enumerate}
+    \item A fully automated, reproducible experiment pipeline capable of running any experiment defined in a JSON configuration file.
+    \item At least 2{,}000 successfully processed benchmark requests with a 0\% error rate.
+    \item Quantitative characterization of at least three vLLM parameters across at least two concurrency levels.
+    \item Quality evaluation results (lm-evaluation-harness scores) for all quantization variants.
+    \item A unified analysis notebook producing publication-quality plots covering all metric categories.
+\end{enumerate}
+
+All criteria were met. The final campaign processed 2{,}041 requests at 100\% success rate.
+
+\subsection{Risk Analysis}
+
+\begin{table}[h!]
+\caption{Risk analysis for the project.}
+\centering
+\begin{tabular}{|p{4.5cm}|c|c|p{5cm}|}
+\hline
+\textbf{Risk} & \textbf{Probability} & \textbf{Impact} & \textbf{Mitigation} \\
+\hline
+GCP GPU quota unavailable & High & High & Fallback to Lightning AI; budget alert to prevent cost overruns \\
+\hline
+vLLM version API changes & Medium & Medium & Pin vLLM version; use YAML config abstraction \\
+\hline
+OOM errors under high concurrency & Medium & Medium & Monitor KV cache; limit \texttt{max-num-seqs} \\
+\hline
+Locust worker crashes during long tests & Low & Medium & Use distributed master/worker Locust setup; retry logic \\
+\hline
+Model download failures (HuggingFace) & Low & Low & Cache model weights on persistent disk \\
+\hline
+\end{tabular}
+\label{table:risks}
+\end{table}
+
+\subsection{Team Work}
+
+The project was conducted by two students. Infrastructure setup, Kubernetes manifests, and the GCP/Lightning AI deployment scripts were developed collaboratively. Eray Y\"{u}kl\"{u} led the development of the Locust load generator, SSE streaming parser, and the per-request metrics collection pipeline. S\"{u}leyman Tolga Acar led the experiment runner automation, GPU/vLLM telemetry collection, and the Jupyter analysis notebook. Both students jointly designed the experiment matrix, ran the experiments, and contributed to the analysis and report writing.
+
+% ============================================================
+\chapter{RELATED WORK}
+% ============================================================
+
+\section{LLM Inference Engines}
+
+The field of LLM inference optimization has grown rapidly in parallel with the proliferation of large transformer models. Early serving systems such as TensorFlow Serving and TorchServe were designed for classical deep learning workloads and lack the specialized memory management required for autoregressive generation.
+
+vLLM~\cite{kwon2023efficient} introduced PagedAttention, which allocates the KV cache in fixed-size blocks analogous to OS memory pages, nearly eliminating fragmentation and enabling 2--4$\times$ higher throughput than systems using contiguous KV cache allocation. Concurrent work includes TensorRT-LLM~\cite{tensorrt}, which uses NVIDIA's TensorRT compiler to produce highly optimized CUDA kernels; NVIDIA Dynamo (TorchDynamo-based); and Hugging Face Text Generation Inference (TGI). Each system offers different trade-offs between portability, ease of use, and peak throughput.
+
+vLLM's V1 engine (version 0.16+), used in this project, introduced further improvements including a redesigned scheduler, native support for chunked prefill as a default, and improved prefix caching.
+
+\section{KV Cache Optimization}
+
+The KV (Key-Value) cache stores the intermediate attention states of already-processed tokens, enabling efficient incremental decoding. Efficient KV cache management is critical because its memory footprint grows linearly with context length, number of transformer layers, and batch size.
+
+PagedAttention~\cite{kwon2023efficient} addresses fragmentation. Prefix caching~\cite{zheng2023efficiently} extends this by reusing KV blocks for tokens that are shared across requests---most commonly a system prompt---reducing the TTFT for repeated-prefix workloads. RadixAttention~\cite{radix} generalizes this to a trie structure for more flexible prefix reuse. This project empirically measures the benefit of vLLM's built-in prefix caching implementation.
+
+\section{Quantization for Inference}
+
+Model quantization reduces the numerical precision of weights and activations, decreasing both memory footprint and, on hardware with native low-precision support, computation time. FP8 quantization is natively accelerated on NVIDIA H100 and, partially, on L4 GPUs. AWQ~\cite{awq} and GPTQ~\cite{gptq} are popular 4-bit weight-only quantization schemes that apply calibration-based rounding to minimize accuracy loss. BitsAndBytes~\cite{bnb} provides a library-level INT4/INT8 quantization compatible with any CUDA GPU.
+
+Prior work~\cite{dettmers2022llmint8} demonstrates that INT8 quantization introduces negligible accuracy loss for most tasks, while INT4 methods show greater variance. This project extends these findings to the specific context of LLM serving under concurrent load, measuring both the latency impact and the quality impact across multiple benchmarks.
+
+\section{LLM Serving Benchmarks}
+
+The vLLM benchmark tool (included in the vLLM repository) and ShareGPT-based datasets are standard for measuring serving throughput. Agrawal et al.~\cite{agrawal2024sarathi} study the prefill--decode interference problem and propose chunked prefill as a mitigation. The LMSys Chatbot Arena~\cite{lmsys} provides production traffic traces. MLPerf Inference~\cite{mlperf} defines standardized offline and server scenarios for LLM benchmarking.
+
+This project uses Locust as the load generator rather than the vLLM benchmark tool, which enables more realistic concurrent user simulation, SSE streaming support, and per-request metric collection (TTFT, TPOT, ITL) that the vLLM benchmark tool does not natively provide.
+
+\section{Reasoning Models}
+
+DeepSeek-R1~\cite{deepseek} is a reasoning-capable model that generates a chain-of-thought \texttt{<think>...</think>} block before producing its final answer. This significantly increases the number of output tokens per request compared to a non-reasoning model answering the same question directly, with corresponding effects on E2E latency and throughput. This project is among the first to systematically compare the serving performance of reasoning and non-reasoning 7B models under identical load conditions.
+
+% ============================================================
+\chapter{METHODOLOGY}
+% ============================================================
+
+\section{Metrics Framework}
+
+We measure a comprehensive set of metrics drawn from three sources: client-side (Locust), server-side (vLLM Prometheus endpoint), and GPU-level (nvidia-smi).
+
+\subsection{Latency Metrics}
+
+\textbf{Time to First Token (TTFT)} is the wall-clock time from the moment the HTTP request is dispatched until the first output token arrives at the client. It captures the prefill phase duration, any queuing delay, and network round-trip overhead. TTFT is the primary indicator of perceived responsiveness.
+
+\textbf{Time Per Output Token (TPOT)} is the average time between consecutive output tokens during the decode phase, computed as:
+\begin{equation}
+\text{TPOT} = \frac{t_{\text{last token}} - t_{\text{first token}}}{\max(N_{\text{output}} - 1,\, 1)}
+\end{equation}
+TPOT determines how fast text streams to the user. A TPOT exceeding approximately 60 ms/token corresponds to slower than comfortable reading speed.
+
+\textbf{End-to-End Latency (E2E)} is the total wall-clock time from request submission to the final token:
+\begin{equation}
+\text{E2E} = \text{TTFT} + \text{TPOT} \times (N_{\text{output}} - 1)
+\end{equation}
+
+\textbf{Inter-Token Latency (ITL)} measures the individual time gaps between each pair of consecutive tokens. Unlike TPOT (which is an average), ITL variance exposes jitter---a ``stuttering'' stream that users perceive as laggy even if the mean is acceptable. We report ITL as P50 and P99 per request.
+
+\subsection{Throughput Metrics}
+
+\textbf{Output Token Throughput} (tokens/s) is the total number of output tokens generated across all concurrent requests per unit time:
+\begin{equation}
+\text{Throughput} = \frac{\sum N_{\text{output}}}{T_{\text{test duration}}}
+\end{equation}
+
+\textbf{Cost per Million Output Tokens} (USD/M tokens) combines throughput with the GPU hourly cost:
+\begin{equation}
+\text{Cost/M} = \frac{\text{GPU rate (USD/hr)} \times T_{\text{hours}}}{\sum N_{\text{output}} / 10^6}
+\end{equation}
+
+\subsection{Resource Utilization Metrics}
+
+GPU utilization percentage, VRAM usage (MB), GPU power draw (W), and temperature ($^\circ$C) are sampled every 2 seconds via \texttt{nvidia-smi}.
+
+KV cache utilization percentage (\texttt{vllm:kv\_cache\_usage\_perc}), number of running and waiting requests (\texttt{vllm:num\_requests\_running}, \texttt{vllm:num\_requests\_waiting}), and generation throughput (\texttt{vllm:generation\_tokens\_total}) are scraped from the vLLM Prometheus endpoint every 2 seconds.
+
+\subsection{Quality Metrics}
+
+Model quality is evaluated offline using \texttt{lm-evaluation-harness}~\cite{lmeval} on three standard benchmarks: ARC-Challenge (5-shot, normalized accuracy), MMLU (5-shot, accuracy), and GSM8K (5-shot, exact match). Quality evaluations are run after each quantization variant is deployed to the same vLLM endpoint used for load testing, ensuring consistency.
+
+\section{Statistical Reporting}
+
+Raw averages can be misleading for latency distributions, which are typically right-skewed. All latency metrics are reported as P50 (median), P95, and P99 in addition to the mean. P99 is of particular operational significance: with 1{,}000 requests per minute, a P99 of 5 seconds means roughly 10 users per minute experience a 5-second wait---a direct SLA concern.
+
+\section{Experimental Hypotheses}
+
+Before running experiments, the following hypotheses were formulated:
+
+\begin{itemize}
+    \item FP8 quantization will reduce TTFT and TPOT by 10--30\% with less than 3\% quality degradation.
+    \item BitsAndBytes (INT4) quantization will further reduce memory footprint but may degrade latency due to dequantization overhead on the L4 GPU.
+    \item The reasoning model will have comparable TTFT but much higher E2E latency than the non-reasoning model due to chain-of-thought output.
+    \item Prefix caching will reduce TTFT by more than 50\% for workloads with shared system prompts at high concurrency.
+    \item KV cache utilization will remain low (below 20\%) for a 7B model on a 24 GB GPU even at high concurrency, making \texttt{gpu-memory-utilization} a non-bottleneck parameter.
+\end{itemize}
+
+% ============================================================
+\chapter{REQUIREMENTS SPECIFICATION}
+% ============================================================
+
+\section{Functional Requirements}
+
+\begin{enumerate}
+    \item The system shall deploy vLLM with configurable parameters on both GKE (Kubernetes) and Lightning AI (bare-metal) environments.
+    \item The experiment runner shall accept a JSON experiment definition file and execute each experiment sequentially, patching vLLM parameters between experiments without manual intervention.
+    \item The load generator shall send HTTP requests to the vLLM OpenAI-compatible API endpoint using streaming SSE, and shall record TTFT, TPOT, ITL (P50/P99), E2E latency, output token count, and finish reason for each request.
+    \item The GPU monitor shall sample \texttt{nvidia-smi} and the vLLM \texttt{/metrics} endpoint at configurable intervals and persist results to CSV.
+    \item The analysis notebook shall produce, for each experiment: latency distribution plots (violin, box), throughput bar charts, cost efficiency curves, KV cache time series, GPU utilization plots, and a Pareto frontier chart.
+    \item The quality evaluator shall run \texttt{lm-evaluation-harness} against the vLLM API endpoint and store per-task scores.
+    \item The budget alert system shall automatically disable GCP billing when cumulative spend exceeds the configured threshold.
+\end{enumerate}
+
+\section{Non-Functional Requirements}
+
+\begin{enumerate}
+    \item \textbf{Reproducibility}: Every experiment run shall be uniquely identified (timestamp-based run ID), and all configuration, results, and logs shall be stored together under a single run directory.
+    \item \textbf{Scalability}: The pipeline shall support any number of experiments and concurrency levels defined in the JSON file without code changes.
+    \item \textbf{Reliability}: The experiment runner shall handle vLLM restart failures gracefully (skipping the experiment and logging the failure) without aborting the entire campaign.
+    \item \textbf{Observability}: All intermediate state (Locust stats, GPU metrics, vLLM metrics, Prometheus metrics) shall be persisted so that experiments can be re-analyzed without re-running.
+    \item \textbf{Cost safety}: Cloud GPU costs shall be bounded by the automated billing disable mechanism.
+\end{enumerate}
+
+\section{Use Cases}
+
+\begin{description}
+    \item[UC1: Run Experiment Campaign] The researcher defines experiments in a JSON file and invokes the experiment runner. The runner iterates through all experiments, restarts vLLM as needed, executes Locust tests, collects metrics, and stores results.
+    \item[UC2: Analyze Results] The researcher opens the Jupyter analysis notebook, points it at the run directory, and executes all cells to produce latency/throughput/cost/GPU plots and summary tables.
+    \item[UC3: Evaluate Model Quality] The researcher invokes the quality evaluation script, which discovers the vLLM endpoint via \texttt{kubectl}, health-checks it, runs \texttt{lm-evaluation-harness}, and stores scores.
+    \item[UC4: Monitor Live Test] During a running Locust test, the researcher monitors real-time metrics via the Grafana dashboard (GKE) or direct vLLM \texttt{/metrics} polling (Lightning AI).
+\end{description}
+
+% ============================================================
+\chapter{DESIGN}
+% ============================================================
+
+\section{System Architecture}
+
+The system is organized into five major subsystems: Infrastructure, Load Generator, Experiment Runner, Telemetry Collection, and Analysis Pipeline.
+
+\subsection{Infrastructure}
+
+On GKE, vLLM is deployed as a Kubernetes \texttt{Deployment} in the \texttt{vllm} namespace with one replica, one NVIDIA L4 GPU, 6 vCPUs, and 24 GiB memory. A \texttt{LoadBalancer} \texttt{Service} exposes the vLLM OpenAI API on port 80 (forwarded to port 8000 on the pod). Model configuration is stored in a \texttt{ConfigMap} (YAML file), and the HuggingFace token is stored in a \texttt{Secret}. Health probes (startup, liveness, readiness) guard against deploying a partially-initialized model.
+
+On Lightning AI, vLLM runs as a direct \texttt{nohup} process managed by \texttt{serve.sh}. This eliminates Kubernetes rollout overhead and allows faster experiment iteration.
+
+Monitoring on GKE uses the \texttt{kube-prometheus-stack} Helm chart (Prometheus + Grafana). A \texttt{ServiceMonitor} scrapes the vLLM \texttt{/metrics} endpoint; a \texttt{PodMonitor} scrapes DCGM GPU metrics from the GKE-managed DCGM exporter. A custom Locust dashboard (JSON) and official vLLM dashboards are provisioned into Grafana via a \texttt{ConfigMap}.
+
+\subsection{Load Generator (Locust)}
+
+The Locust load generator (\texttt{locustfile.py}) implements a single \texttt{VllmUser} task class that:
+
+\begin{enumerate}
+    \item Randomly samples a prompt from the loaded dataset (ShareGPT or custom).
+    \item Sends a streaming POST to \texttt{/v1/chat/completions} with \texttt{stream=True}.
+    \item Parses the SSE stream token by token, recording the timestamp of each token.
+    \item Computes TTFT, TPOT, ITL (P50/P99), E2E, output token count, and finish reason.
+    \item Appends the result to an in-memory list, which is flushed to CSV on test stop.
+\end{enumerate}
+
+The load generator supports two dataset modes: ShareGPT (multi-turn conversations, auto-downloaded) and a custom dataset (\texttt{dataset.json}) with 37 prompts spanning coding, creative, reasoning, and general categories across short/medium/long lengths. A separate \texttt{prefix\_dataset.json} provides shared-system-prompt prompts for prefix caching evaluation.
+
+On GKE, Locust runs in a distributed master/worker configuration (1 master, 2 workers) using the official Locust Docker image with a Prometheus exporter on port 9646.
+
+\subsection{Experiment Runner}
+
+The experiment runner (\texttt{run\_experiment.sh}) implements the following loop for each experiment:
+
+\begin{enumerate}
+    \item Parse the JSON experiment definition (name, vLLM extra args, concurrency levels, prompt categories).
+    \item Patch the vLLM deployment (GKE: \texttt{kubectl patch}; Lightning AI: \texttt{serve.sh restart}) and wait for the health endpoint to return 200.
+    \item For each (concurrency, prompt category) combination: start the GPU/vLLM monitor, trigger the Locust test via the REST API, wait for the run duration, stop the monitor, and collect all output files.
+    \item Save results under \texttt{results/<run\_id>/<experiment\_name>/}.
+\end{enumerate}
+
+\subsection{Telemetry Collection}
+
+GPU metrics are collected by \texttt{gpu\_monitor.sh}, which polls \texttt{nvidia-smi} and the vLLM \texttt{/metrics} endpoint at 2-second intervals, writing GPU utilization, VRAM, power draw, temperature, KV cache percentage, running/waiting request counts, and generation throughput to separate CSV files.
+
+On GKE, Prometheus metrics for the full test window are fetched post-hoc via the \texttt{fetch\_metrics.sh} script, which queries the Prometheus \texttt{query\_range} API for 27 pre-defined metrics derived from the Grafana dashboard panels.
+
+\subsection{Analysis Pipeline}
+
+The Jupyter notebook (\texttt{analyze\_results.ipynb}) loads all CSVs from both experiment runs, computes summary statistics, and produces the following outputs:
+
+\begin{itemize}
+    \item Violin and box plots for TTFT, TPOT, and E2E distributions by experiment and concurrency level.
+    \item Heatmaps (experiment $\times$ concurrency) for P50/P99 TTFT, TPOT, and E2E.
+    \item Pareto frontier scatter plot: output token throughput vs.\ P95 TTFT.
+    \item Cost efficiency line charts: USD per million output tokens vs.\ concurrency.
+    \item GPU utilization time series and KV cache time series per (experiment, concurrency).
+    \item Prefix caching improvement bar chart and percentage change table.
+    \item Quality bar charts and heatmaps from lm-evaluation-harness scores.
+    \item Performance vs.\ quality scatter plots.
+\end{itemize}
+
+\section{Information Structure}
+
+Each benchmark run produces the following data artifacts, organized in a directory tree:
+
+\begin{verbatim}
+results/
+  run_<YYYYMMDD_HHMMSS>/
+    <experiment_name>/
+      config.json                  # experiment parameters
+      <label>_custom_metrics.csv   # per-request Locust metrics
+      <label>_stats.csv            # Locust aggregate stats
+      <label>_gpu_metrics.csv      # nvidia-smi time series
+      <label>_vllm_metrics.csv     # vLLM /metrics time series
+      <label>_prometheus_metrics.csv  # Prometheus time series
+      <label>_prompt_responses.jsonl  # prompts + model responses
+\end{verbatim}
+
+The custom metrics CSV has one row per request, with columns: \texttt{timestamp}, \texttt{category}, \texttt{approx\_chars}, \texttt{output\_tokens}, \texttt{ttft\_ms}, \texttt{tpot\_ms}, \texttt{e2e\_ms}, \texttt{itl\_p50\_ms}, \texttt{itl\_p99\_ms}, \texttt{finish\_reason}, \texttt{success}, \texttt{error\_type}.
+
+\section{Information Flow}
+
+The high-level information flow is:
+
+\begin{enumerate}
+    \item The experiment runner reads the JSON experiment file and drives the outer control loop.
+    \item For each experiment, it configures the vLLM server and signals Locust to start a swarm.
+    \item Locust workers generate HTTP requests to vLLM, parse SSE responses, and accumulate per-request metrics in memory.
+    \item In parallel, the GPU monitor polls \texttt{nvidia-smi} and \texttt{/metrics} and writes CSVs.
+    \item On test stop, Locust workers flush their metric buffers to CSV; the experiment runner copies these files to the results directory.
+    \item After all experiments, the Jupyter notebook reads the results directory and produces the analysis outputs.
+    \item The quality evaluator sends requests to the same vLLM endpoint and records lm-eval scores.
+\end{enumerate}
+
+\section{Deployment Architecture}
+
+\subsection{GKE Deployment}
+
+The GKE cluster is provisioned in \texttt{europe-west3-b} (Frankfurt) with a CPU node pool (\texttt{n2d-standard-4}) and a GPU node pool (\texttt{g2-standard-8} with 1 NVIDIA L4). Node affinity rules ensure Locust pods are scheduled on CPU nodes and the vLLM pod on the GPU node. NVIDIA GPU drivers are installed via the Google-managed DCGM daemonset.
+
+\subsection{Lightning AI Deployment}
+
+For experiments run on Lightning AI, vLLM is started directly via \texttt{vllm serve} with parameters read from \texttt{config.env}. The experiment runner calls \texttt{serve.sh restart} between experiments, passing the new extra args. This avoids Kubernetes rollout latency (approximately 15 minutes per restart on GKE) and reduces iteration time significantly.
+
+\section{User Interface Design}
+
+The primary user interfaces are:
+
+\begin{enumerate}
+    \item \textbf{Grafana Dashboard}: Real-time visualization of TTFT/TPOT/E2E/ITL percentiles, KV cache utilization, GPU metrics, and Locust request rates during live tests. The dashboard JSON is provisioned automatically by the monitoring deployment script.
+    \item \textbf{Locust Web UI}: Available at \texttt{localhost:8089} via port-forward, showing live request statistics and charts during a test run.
+    \item \textbf{Jupyter Notebook}: Post-experiment analysis interface with fully reproducible cells.
+    \item \textbf{CLI}: All experiment management is shell-script-based for easy integration into CI/CD pipelines.
+\end{enumerate}
+
+% ============================================================
+\chapter{IMPLEMENTATION AND TESTING}
+% ============================================================
+
+\section{Implementation}
+
+\subsection{vLLM Deployment Scripts}
+
+The vLLM deployment is managed by three shell scripts: \texttt{gke.sh} (cluster and GPU node pool creation), \texttt{deploy.sh} (Kubernetes manifest application, ConfigMap creation, rollout wait), and \texttt{serve.sh} (Lightning AI start/stop/restart). Configuration is separated into \texttt{infra\_config.env} (cluster parameters), \texttt{vllm\_config.yaml} (model serving parameters), and \texttt{secrets.env} (HuggingFace token).
+
+The vLLM Kubernetes deployment uses a \texttt{Recreate} rollout strategy (rather than \texttt{RollingUpdate}) because the GPU node has only one GPU; a rolling update would stall indefinitely waiting for a second GPU slot that does not exist. Startup, liveness, and readiness probes check the \texttt{/health} endpoint with generous timeouts to accommodate model weight download and loading times (up to 20 minutes on first run).
+
+\subsection{Locust Load Generator}
+
+The Locust implementation extends the base \texttt{HttpUser} class with \texttt{wait\_time = constant(0)} (no think time between requests) so that the concurrency level alone controls load intensity. The SSE streaming parser uses the \texttt{sseclient-py} library to iterate over Server-Sent Events and extracts token-level timing.
+
+Special handling is implemented for reasoning models: the \texttt{choices[0].delta.reasoning\_content} field (used by vLLM for DeepSeek-R1's chain-of-thought) is accumulated separately from \texttt{choices[0].delta.content}. A fallback regex extracts \texttt{<think>...</think>} blocks from models that embed reasoning inline in the content stream.
+
+A Prometheus exporter (port 9646) exposes \texttt{locust\_users}, \texttt{locust\_fail\_ratio}, and \texttt{locust\_requests\_total} for real-time monitoring.
+
+\subsection{Experiment Runner}
+
+The GKE experiment runner (\texttt{benchmarking/run\_experiment.sh}) implements the full automation loop including: \texttt{kubectl patch} to update vLLM container args, rollout status waiting (up to 1200s), \texttt{kubectl port-forward} to the Locust master (for API control), Prometheus port-forward (for post-test metric fetch), Locust swarm start/stop via the master REST API, per-worker \texttt{kubectl cp} to retrieve custom metrics CSVs and response JSONL files, and Prometheus \texttt{query\_range} fetch via \texttt{fetch\_metrics.sh}.
+
+The Lightning AI experiment runner (\texttt{lightning-setup/run\_experiment.sh}) replaces Kubernetes operations with direct \texttt{serve.sh} calls and local GPU monitoring, reducing overhead substantially.
+
+\subsection{Budget Guard}
+
+A Cloud Function (\texttt{budget/function/main.py}) is triggered via Pub/Sub when GCP billing exceeds the configured threshold. It calls the Cloud Billing API to disable billing for the project, preventing runaway costs. This is particularly important for GPU workloads where an unattended overnight run can accumulate significant charges.
+
+\subsection{Quality Evaluation Pipeline}
+
+The quality evaluator (\texttt{evaluation/run\_eval.sh}) discovers the vLLM service endpoint via \texttt{kubectl}, health-checks it, and invokes \texttt{lm\_eval} in \texttt{local-completions} mode against the vLLM API. For reasoning models, \texttt{enable\_thinking=true} is passed to ensure the chain-of-thought is generated but the answer is extracted from the content field. \texttt{max\_gen\_toks=4096} is set to prevent truncated answers for long reasoning chains.
+
+\section{Testing}
+
+\subsection{Unit-Level Verification}
+
+Each component was verified independently:
+
+\begin{itemize}
+    \item \textbf{SSE parser}: Verified against recorded vLLM SSE responses to confirm correct token counting and TTFT computation.
+    \item \textbf{Experiment runner dry-run}: The \texttt{--dry-run} flag prints the full experiment plan without touching the cluster, used to verify the experiment matrix before each campaign.
+    \item \textbf{GPU monitor}: Verified by comparing \texttt{\_gpu\_metrics.csv} time series against concurrent Grafana readings.
+    \item \textbf{vLLM health check}: The \texttt{ping.sh} script sends a single chat completion request and measures E2E latency, used as a quick sanity check after each deployment.
+\end{itemize}
+
+\subsection{Integration Testing}
+
+End-to-end pipeline testing was performed by running a single-experiment, single-concurrency campaign and manually verifying that all expected output files were produced, that metric values fell within physically plausible ranges (e.g., TTFT > 0, TPOT > 0, GPU utilization 0--100\%), and that the analysis notebook produced plots without errors.
+
+\subsection{Experiment Validation}
+
+The 100\% success rate across 2{,}041 requests (all experiments combined) provides strong evidence that the pipeline is reliable and that vLLM did not crash or return errors under any tested configuration.
+
+\section{Deployment}
+
+\subsection{GKE Deployment Procedure}
+
+\begin{enumerate}
+    \item \texttt{bash prerequisites.sh} --- verify tools and enable GCP APIs.
+    \item \texttt{bash gke.sh} --- create cluster and GPU node pool.
+    \item \texttt{bash monitoring/deploy.sh} --- deploy Prometheus, Grafana, and dashboards.
+    \item \texttt{bash locust/deploy.sh} --- build and deploy Locust master/workers.
+    \item \texttt{bash vllm/scripts/deploy.sh} --- deploy vLLM.
+    \item \texttt{bash benchmarking/run\_experiment.sh --experiment-file experiments/experiments.json}
+\end{enumerate}
+
+\subsection{Lightning AI Deployment Procedure}
+
+\begin{enumerate}
+    \item \texttt{bash setup.sh} --- install vLLM, Locust, and dependencies.
+    \item \texttt{export HF\_TOKEN=hf\_xxxxx}
+    \item \texttt{bash run\_experiment.sh --experiments ../benchmarking/experiments.json}
+\end{enumerate}
+
+% ============================================================
+\chapter{RESULTS}
+% ============================================================
+
+This chapter presents the results of all benchmark campaigns. All experiments achieved a 100\% request success rate. The total number of successfully processed requests across all campaigns was 2{,}041.
+
+\section{Pilot Study: vLLM Server Parameter Sweep}
+
+An initial parameter sweep was conducted on Lightning AI using the custom 37-prompt dataset. Eight configurations were tested at 1, 4, 8, 16, and 32 concurrent users.
+
+\subsection{Baseline Performance}
+
+At baseline (chunked prefill OFF, prefix caching OFF, \texttt{max-num-seqs} = 128 (default), \texttt{gpu-memory-utilization} = 0.90), the following P50 latencies were observed:
+
+\begin{table}[h!]
+\caption{Baseline latency at different concurrency levels (DeepSeek-R1, FP16, Lightning AI L4).}
+\centering
+\begin{tabular}{|c|r|r|r|}
+\hline
+\textbf{Users} & \textbf{P50 TTFT (ms)} & \textbf{P50 TPOT (ms/tok)} & \textbf{P50 E2E (ms)} \\
+\hline
+1 & 75 & 56 & 14{,}464 \\
+\hline
+4 & 147 & 58 & 14{,}802 \\
+\hline
+8 & 178 & 58 & 14{,}933 \\
+\hline
+\end{tabular}
+\label{table:baseline}
+\end{table}
+
+The E2E latency is approximately $256 \times 56\,\text{ms} + 75\,\text{ms} \approx 14{,}411\,\text{ms}$, matching the theoretical expectation almost exactly (within 0.4\%). TPOT remains stable across concurrency levels because decode throughput is memory-bandwidth-bound and is nearly independent of batch size in this range.
+
+\subsection{Effect of max-num-seqs}
+
+Reducing \texttt{max-num-seqs} to 8 showed negligible performance difference from baseline at low concurrency. Increasing to 32 and testing at 32 users achieved the highest throughput observed in the pilot (455 tok/s) but at the cost of higher TTFT (276 ms P50 at u=32 vs.\ 178 ms at u=8 for baseline).
+
+\subsection{Effect of gpu-memory-utilization}
+
+Changing \texttt{gpu-memory-utilization} between 0.80 and 0.95 showed no measurable performance difference. KV cache utilization peaked at only 5.4\% across all configurations, confirming that a 7B model on a 24 GB GPU does not exhaust the KV cache at the tested concurrency levels.
+
+\subsection{Effect of Chunked Prefill}
+
+With the short prompts used in the pilot dataset (maximum 127 tokens), chunked prefill showed no measurable improvement. This is expected: chunked prefill's primary benefit is reducing head-of-line blocking when long prompts monopolize prefill compute, which does not occur with short prompts.
+
+\subsection{Effect of Prefix Caching}
+
+A dedicated Run 2 using shared-system-prompt prompts demonstrated the following TTFT improvements relative to the no-caching baseline:
+
+\begin{table}[h!]
+\caption{Prefix caching TTFT P50 improvement vs.\ baseline (shared-prefix dataset).}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Configuration} & \textbf{u=1} & \textbf{u=4} & \textbf{u=8} \\
+\hline
+prefix\_caching\_on & $-9.2\%$ & $-35.4\%$ & $-53.7\%$ \\
+prefix\_chunked\_plus\_cache & $-1.8\%$ & $-39.8\%$ & $-55.7\%$ \\
+\hline
+\end{tabular}
+\label{table:prefix}
+\end{table}
+
+The improvement grows with concurrency because later requests find pre-warmed cache entries. At u=8, TTFT drops by over half. This is a major benefit for production chatbot applications where the same system prompt is sent with every request.
+
+\subsection{Throughput and Cost in the Pilot}
+
+Output token throughput scaled approximately linearly with concurrency: from approximately 90 tok/s at u=1 to 455 tok/s at u=32 with \texttt{max-num-seqs}=32. The corresponding cost per million output tokens dropped from approximately \$21 at u=1 to approximately \$0.90 at u=32, a 23$\times$ reduction. This illustrates the fundamental economics of LLM serving: GPU time is fixed, so throughput directly determines cost efficiency.
+
+\section{Main Campaign: Quantization --- Reasoning Model (DeepSeek-R1)}
+
+\subsection{FP8 Quantization}
+
+FP8 quantization delivers substantial latency improvements over the FP16 baseline:
+
+\begin{table}[htbp]
+\caption{DeepSeek-R1 quantization comparison at 16 concurrent users.}
+\centering
+\begin{tabular}{|p{2.8cm}|p{2.2cm}|p{2.8cm}|p{2.2cm}|p{2.8cm}|}
+\hline
+\textbf{Configuration} & \textbf{TTFT P50 (ms)} & \textbf{TPOT P50 (ms/tok)} & \textbf{E2E P50 (ms)} & \textbf{Throughput (tok/s)} \\
+\hline
+Baseline (FP16) & 468 & 69 & 71{,}382 & 262 \\
+FP8 & 338 & 45 & 46{,}503 & 301 \\
+BitsAndBytes & 689 & 138 & 200{,}770 & 136 \\
+\hline
+\end{tabular}
+\label{table:quant_reasoning_u16}
+\end{table}
+
+FP8 reduces TTFT P50 by 28\%, TPOT P50 by 35\%, and E2E P50 by 35\% compared to the FP16 baseline. At 64 concurrent users, the TPOT improvement is $111 \to 76$ ms/tok ($-31\%$). These are large gains for a single configuration change.
+
+\subsection{BitsAndBytes (INT4) Quantization}
+
+BitsAndBytes performs severely worse than both baseline and FP8:
+
+\begin{itemize}
+    \item TTFT P50: $689\,\text{ms}$ vs.\ $468\,\text{ms}$ baseline ($+47\%$)
+    \item TPOT P50: $138\,\text{ms/tok}$ vs.\ $69\,\text{ms/tok}$ ($+100\%$)
+    \item E2E P50: $200{,}770\,\text{ms}$ vs.\ $71{,}382\,\text{ms}$ ($+181\%$)
+    \item Cost: $\$3.22$/M tokens vs.\ $\$1.67$/M for baseline ($+93\%$ more expensive)
+\end{itemize}
+
+BitsAndBytes nearly doubles the per-token generation time. This occurs because the L4 GPU does not have native INT4 computation support; BitsAndBytes performs dequantization to FP16 at runtime, adding overhead rather than reducing it.
+
+\section{Main Campaign: Quantization --- Non-Reasoning Model (Qwen2.5-7B-Instruct)}
+
+FP8 quantization again improves TTFT significantly for the non-reasoning model:
+
+\begin{table}[h!]
+\caption{Qwen2.5 quantization comparison at 16 concurrent users.}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Configuration} & \textbf{TTFT P50 (ms)} & \textbf{TPOT P50 (ms/tok)} & \textbf{E2E P50 (ms)} \\
+\hline
+Baseline (FP16) & 574 & 72 & 41{,}955 \\
+FP8 & 403 & 70 & 39{,}369 \\
+\hline
+\end{tabular}
+\label{table:quant_nonreasoning}
+\end{table}
+
+The TTFT improvement ($-30\%$) is comparable to the reasoning model. TPOT improvement is modest ($-3\%$) because the non-reasoning model generates fewer output tokens, reducing the proportion of inference time spent in the decode phase where FP8's compute benefits are largest.
+
+\section{Reasoning vs.\ Non-Reasoning Model Comparison}
+
+\begin{table}[h!]
+\caption{Reasoning vs.\ non-reasoning model at FP16 baseline, 16 concurrent users.}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Model} & \textbf{TTFT P50 (ms)} & \textbf{TPOT P50 (ms/tok)} & \textbf{E2E P50 (ms)} \\
+\hline
+DeepSeek-R1 (reasoning) & 468 & 69 & 71{,}382 \\
+Qwen2.5 (non-reasoning) & 574 & 72 & 41{,}955 \\
+\hline
+\end{tabular}
+\label{table:reasoning_vs_nonreasoning}
+\end{table}
+
+Despite similar per-token generation speeds (TPOT is nearly identical), the reasoning model's E2E latency is 70\% higher because it generates a chain-of-thought block before the answer, producing far more output tokens per request. For applications where only the final answer is needed, the non-reasoning model offers much faster response times. For reasoning-intensive tasks (mathematics, code generation with complex logic), the reasoning model's quality advantage must be weighed against this latency cost.
+
+\section{Main Campaign: I/O Profile Analysis}
+
+Six prompt profiles were tested to understand how input/output characteristics affect latency. Results are for DeepSeek-R1 with FP8 quantization.
+
+\subsection{TTFT by Profile}
+
+TTFT remains remarkably consistent across all profiles ($\approx 190$ ms at u=16, $\approx 260$ ms at u=64), regardless of whether prompts are short (coding, general), medium (reasoning, creative), or long (detailed system design questions). This confirms that within the 4096-token context window, the prefill phase is not a bottleneck on the L4 GPU for these prompt lengths.
+
+\subsection{E2E Latency by Profile}
+
+E2E latency varies substantially with profile, driven entirely by output token count:
+
+\begin{table}[h!]
+\caption{E2E P50 latency by I/O profile (FP8, DeepSeek-R1).}
+\centering
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Profile} & \textbf{E2E P50 at u=16 (ms)} & \textbf{E2E P50 at u=64 (ms)} \\
+\hline
+short\_input & 36{,}964 & 52{,}883 \\
+all (mixed) & 92{,}864 & 117{,}772 \\
+creative & 101{,}756 & 151{,}591 \\
+coding & 124{,}261 & 149{,}412 \\
+reasoning & 124{,}599 & 164{,}183 \\
+long\_input & 126{,}043 & 169{,}961 \\
+\hline
+\end{tabular}
+\label{table:io_profiles}
+\end{table}
+
+Short-input prompts finish 3.4$\times$ faster than long-input prompts at u=16. This is driven by output length, not input length: with \texttt{max\_tokens=2048}, the reasoning model tends to generate longer chains of thought for complex inputs.
+
+\section{Throughput and Cost Analysis}
+
+\begin{table}[htbp]
+\caption{Cost per million output tokens at different configurations and concurrency levels.}
+\centering
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Configuration} & \textbf{u=16 (\$/M tok)} & \textbf{u=64 (\$/M tok)} \\
+\hline
+DeepSeek-R1 FP16 baseline & \$1.67 & \$0.68 \\
+DeepSeek-R1 FP8 & \$1.46 & \$0.47 \\
+DeepSeek-R1 BitsAndBytes & \$3.22 & --- \\
+Qwen2.5 FP16 baseline & \$2.06 & \$0.81 \\
+Qwen2.5 FP8 & \$1.91 & --- \\
+\hline
+\end{tabular}
+\label{table:cost}
+\end{table}
+
+The lowest cost configuration is DeepSeek-R1 FP8 at u=64: \$0.47/M output tokens. This is 6.85$\times$ cheaper than BitsAndBytes at u=16 (\$3.22/M). Higher concurrency (more requests batched together per GPU forward pass) is the single biggest driver of cost reduction, followed by FP8 quantization.
+
+\section{Quality Evaluation}
+
+\begin{table}[htbp]
+\caption{lm-evaluation-harness quality scores by model and quantization.}
+\centering
+\begin{tabular}{|l|l|r|r|r|}
+\hline
+\textbf{Model} & \textbf{Quantization} & \textbf{ARC-Challenge} & \textbf{MMLU} & \textbf{GSM8K} \\
+\hline
+DeepSeek-R1 & FP16 (baseline) & 0.526 & 0.593 & 0.800 \\
+DeepSeek-R1 & FP8 & 0.518 & 0.579 & 0.785 \\
+DeepSeek-R1 & BitsAndBytes & 0.516 & 0.593 & --- \\
+\hline
+Qwen2.5 & FP16 (baseline) & 0.662 & 0.782 & 0.881 \\
+Qwen2.5 & FP8 & 0.670 & 0.779 & 0.879 \\
+Qwen2.5 & BitsAndBytes & 0.644 & --- & 0.861 \\
+\hline
+\end{tabular}
+\label{table:quality}
+\end{table}
+
+FP8 quantization causes negligible quality degradation: the maximum reduction is $-2.37\%$ (MMLU for DeepSeek-R1). Qwen2.5 FP8 even shows a slight gain on ARC-Challenge ($+1.21\%$), which is within measurement noise. BitsAndBytes causes up to $-2.72\%$ degradation (ARC-Challenge for Qwen2.5).
+
+Qwen2.5 outperforms DeepSeek-R1 on all three benchmarks, reflecting its larger training dataset and more recent training methodology.
+
+\section{Data Completeness}
+
+Some experiments have partial data due to infrastructure issues encountered during the campaign:
+
+\begin{table}[htbp]
+\caption{Data completeness across experiment campaigns.}
+\centering
+\begin{tabular}{|p{3cm}|p{4.2cm}|p{2.4cm}|p{2.2cm}|p{2.2cm}|}
+\hline
+\textbf{Campaign} & \textbf{Experiment} & \textbf{Custom Metrics} & \textbf{Prometheus} & \textbf{Locust Stats} \\
+\hline
+Quant Reasoning & baseline (u64) & \checkmark & \checkmark & \checkmark \\
+Quant Reasoning & fp8 (u64) & \checkmark & \checkmark & \checkmark \\
+Quant Reasoning & bitsandbytes (u16) & \texttimes & \texttimes & \checkmark \\
+Quant Non-Reasoning & non\_reasoning\_baseline (u64) & \checkmark & \checkmark & \checkmark \\
+I/O Profiles & all (u16 and u64) & \checkmark & \checkmark & \checkmark \\
+\hline
+\end{tabular}
+\label{table:completeness}
+\end{table}
+
+Full per-request custom metrics (TTFT, TPOT, ITL) were available for the I/O profiles campaign and for key quantization configurations. Some early quantization runs captured only Locust aggregate statistics, which still provide sufficient data for the primary latency and throughput comparisons.
+
+% ============================================================
+\chapter{CONCLUSION}
+% ============================================================
+
+\section{Summary of Findings}
+
+This project has produced the following primary findings from a systematic benchmarking campaign of vLLM on NVIDIA L4 GPUs:
+
+\textbf{Finding 1: FP8 quantization is the clear recommendation for production LLM serving.} It reduces TTFT P50 by 28--30\%, TPOT P50 by 3--35\%, and E2E P50 by 6--35\% relative to FP16, while causing less than 2.4\% quality degradation on ARC-Challenge, MMLU, and GSM8K. The cost per million output tokens drops from \$1.67 to \$1.46 at 16 users and from \$0.68 to \$0.47 at 64 users.
+
+\textbf{Finding 2: BitsAndBytes (INT4) quantization is counterproductive on the L4 GPU.} It doubles TPOT (to 138 ms/tok), increases E2E latency by 181\%, and increases cost per million tokens by 93\% relative to FP16. This is because the L4 lacks native INT4 compute, and the BitsAndBytes dequantization overhead exceeds the memory bandwidth savings.
+
+\textbf{Finding 3: Higher concurrency is the dominant cost-reduction lever.} Moving from 16 to 64 concurrent users reduces cost per million tokens from \$1.67 to \$0.68 for the FP16 baseline (a 2.5$\times$ reduction)---larger than any single parameter change. FP8 at u=64 achieves \$0.47/M tokens, 6.85$\times$ cheaper than BitsAndBytes at u=16.
+
+\textbf{Finding 4: Reasoning models are significantly more expensive to serve.} DeepSeek-R1's E2E P50 (71{,}382 ms) is 70\% higher than Qwen2.5's (41{,}955 ms) at identical concurrency and precision, purely because of chain-of-thought output tokens. Applications that do not require step-by-step reasoning should prefer non-reasoning models.
+
+\textbf{Finding 5: TTFT is insensitive to input prompt length within the 4096-token window.} Across all I/O profiles tested (short inputs of $\approx$15 tokens to long inputs of $\approx$140 tokens), TTFT P50 stays in the 185--195 ms range at 16 users. The L4's prefill throughput does not become a bottleneck for prompt lengths below several thousand tokens.
+
+\textbf{Finding 6: E2E latency is driven by output length, not input length.} Short-input prompts finish 3.4$\times$ faster than long-input prompts, but this is because longer prompts elicit longer reasoning chains, not because of prefill overhead.
+
+\textbf{Finding 7: Prefix caching provides up to 55\% TTFT reduction for shared-prefix workloads.} At 8 concurrent users with a shared system prompt, enabling prefix caching reduces TTFT P50 by 53.7--55.7\%. The benefit is negligible at u=1 (cold cache) and grows with concurrency. This makes prefix caching essential for production chatbot deployments where a system prompt is repeated in every request.
+
+\textbf{Finding 8: KV cache is not a bottleneck for 7B models on 24 GB GPUs.} KV cache utilization peaked at 5.4\% across all tested configurations. Parameters like \texttt{gpu-memory-utilization} have no measurable effect in this regime. This would change significantly with larger models or longer context windows.
+
+\section{Practical Recommendations}
+
+\begin{table}[h!]
+\caption{Configuration recommendations for different goals.}
+\centering
+\begin{tabular}{|p{4cm}|p{9cm}|}
+\hline
+\textbf{Goal} & \textbf{Recommendation} \\
+\hline
+Lowest latency & FP8 quantization + high concurrency (u=64+) \\
+\hline
+Lowest cost per token & FP8 + u=64 (\$0.47/M tokens on L4) \\
+\hline
+Best quality & FP16 baseline (marginal gain over FP8, max 2.4\%) \\
+\hline
+Best quality/latency/cost balance & FP8 --- Pareto-optimal across all benchmarks \\
+\hline
+Chatbot with system prompts & Enable prefix caching (up to 55\% TTFT reduction) \\
+\hline
+Avoid & BitsAndBytes --- 2$\times$ slower, no quality advantage \\
+\hline
+\end{tabular}
+\label{table:recommendations}
+\end{table}
+
+\section{Limitations}
+
+\begin{enumerate}
+    \item All experiments used a single GPU (L4). Results may differ on A100, H100, or multi-GPU setups.
+    \item The maximum concurrency tested was 64 users. At higher concurrency, KV cache exhaustion and queuing effects not observed here may emerge.
+    \item Test duration was 90 seconds per sub-test. Longer tests would better characterize steady-state behavior and thermal throttling effects.
+    \item Requests are single-turn; multi-turn conversations create different KV cache reuse patterns.
+    \item The custom prompt dataset (37 prompts) is small and may not fully represent production workload diversity.
+    \item BitsAndBytes testing was limited to u=16; u=64 data was not available due to infrastructure issues.
+\end{enumerate}
+
+\section{Future Work}
+
+\begin{enumerate}
+    \item Extend the experiment matrix to speculative decoding, which can further reduce TPOT by using a small draft model to propose tokens verified by the main model in batch.
+    \item Benchmark on H100 GPUs, where FP8 has native hardware acceleration, to quantify the additional gain over L4.
+    \item Evaluate multi-GPU tensor parallelism (TP=2, TP=4) and its effect on latency and throughput.
+    \item Study longer context workloads (8K--128K tokens) where KV cache management becomes the dominant bottleneck.
+    \item Integrate the benchmarking pipeline with the MLCommons MLPerf Inference suite for standardized cross-system comparison.
+    \item Extend the quality evaluation to include MT-Bench and LiveBench for more realistic assessment of reasoning and instruction-following quality under quantization.
+\end{enumerate}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+% ============================================================
+\appendix
+
+\chapter{vLLM PARAMETER REFERENCE}
+% ============================================================
+
+\section{Install-Time Parameters}
+
+vLLM compiles custom CUDA kernels at install time. The hardware platform (NVIDIA CUDA, AMD ROCm, Intel XPU, CPU-only) and the target GPU compute capabilities (\texttt{TORCH\_CUDA\_ARCH\_LIST}) must be specified at build time. Pre-built pip wheels include support for all common NVIDIA architectures (T4=7.5, A100=8.0, L4=8.9, H100=9.0). Using the Docker image \texttt{vllm/vllm-openai:latest} avoids CUDA version mismatch issues.
+
+\section{Key Runtime Parameters (\texttt{vllm serve})}
+
+\begin{longtable}{|p{5cm}|p{2.5cm}|p{6cm}|}
+\caption{Key vLLM runtime parameters used in this project.} \\
+\hline
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\hline
+\endfirsthead
+\hline
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\hline
+\endhead
+\texttt{--model} & ---  & HuggingFace model ID or local path \\
+\hline
+\texttt{--dtype} & auto & Weight precision: half, bfloat16, float16 \\
+\hline
+\texttt{--max-model-len} & from config & Maximum context length in tokens \\
+\hline
+\texttt{--quantization} & None & Quantization: fp8, bitsandbytes, awq, gptq \\
+\hline
+\texttt{--gpu-memory-utilization} & 0.9 & Fraction of GPU VRAM for KV cache \\
+\hline
+\texttt{--max-num-seqs} & 128 & Max concurrent sequences per batch \\
+\hline
+\texttt{--enable-chunked-prefill} & auto & Split long prefills to reduce head-of-line blocking \\
+\hline
+\texttt{--enable-prefix-caching} & auto & Reuse KV blocks for shared prompt prefixes \\
+\hline
+\texttt{--tensor-parallel-size} & 1 & Number of GPUs for tensor parallelism \\
+\hline
+\texttt{--port} & 8000 & HTTP server port \\
+\hline
+\end{longtable}
+
+\chapter{EXPERIMENT CONFIGURATIONS}
+
+\section{Server Tuning Experiments (Pilot)}
+
+\begin{table}[h!]
+\caption{Server tuning experiment configurations tested in the pilot study.}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Name} & \textbf{Changed Parameter} & \textbf{Concurrency} \\
+\hline
+baseline & --- (defaults) & 1, 4, 8 \\
+max\_seqs\_8 & \texttt{--max-num-seqs 8} & 1, 4, 8 \\
+max\_seqs\_32 & \texttt{--max-num-seqs 32} & 1, 8, 32 \\
+gpu\_mem\_80 & \texttt{--gpu-memory-utilization 0.80} & 1, 4, 8 \\
+gpu\_mem\_95 & \texttt{--gpu-memory-utilization 0.95} & 1, 4, 8, 16 \\
+chunked\_prefill & \texttt{--enable-chunked-prefill} & 1, 4, 8 \\
+prefix\_caching & \texttt{--enable-prefix-caching} & 1, 4, 8 \\
+chunked\_prefill + prefix\_caching & both & 1, 4, 8, 16 \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Quantization Experiments}
+
+\begin{table}[h!]
+\caption{Quantization experiment configurations.}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Name} & \textbf{Model} & \textbf{vLLM Args} \\
+\hline
+baseline & DeepSeek-R1 & FP16 (default) \\
+fp8\_quantization & DeepSeek-R1 & \texttt{--quantization fp8} \\
+bitsandbytes\_quantization & DeepSeek-R1 & \texttt{--quantization bitsandbytes} \\
+non\_reasoning\_baseline & Qwen2.5-7B & non-reasoning config \\
+non\_reasoning\_fp8 & Qwen2.5-7B & \texttt{--quantization fp8} \\
+non\_reasoning\_bitsandbytes & Qwen2.5-7B & \texttt{--quantization bitsandbytes} \\
+\hline
+\end{tabular}
+\end{table}
+
+\chapter{DATASET DESCRIPTIONS}
+
+\section{Custom Prompt Dataset}
+
+The custom dataset (\texttt{dataset.json}) contains 37 prompts across 4 user profiles and 3 length categories:
+
+\begin{table}[h!]
+\caption{Custom dataset composition.}
+\centering
+\begin{tabular}{|l|r|r|r|r|}
+\hline
+\textbf{Profile} & \textbf{Short} & \textbf{Medium} & \textbf{Long} & \textbf{Total} \\
+\hline
+Coding & 5 & 5 & 5 & 15 \\
+Creative & 5 & 5 & 5 & 15 \\
+Reasoning & 5 & 5 & 5 & 15 \\
+General & 5 & 5 & 5 & 15 \\
+\hline
+\textbf{Total} & \textbf{20} & \textbf{20} & \textbf{20} & \textbf{60} \\
+\hline
+\end{tabular}
+\end{table}
+
+Short prompts are approximately 10--20 tokens; medium prompts approximately 50--62 tokens; long prompts approximately 125--148 tokens.
+
+\section{Prefix Caching Dataset}
+
+The prefix caching dataset (\texttt{prefix\_dataset.json}) contains 20 prompts across 3 domain-specific system prompts (code reviewer, database consultant, MLOps mentor). Each prompt is paired with a long, detailed system prompt (approximately 250--350 tokens) to maximize prefix reuse. This setup simulates real-world chatbot and API gateway deployments where the same system prompt is sent with every user request.
+
+\section{Quality Evaluation Datasets}
+
+\begin{itemize}
+    \item \textbf{ARC-Challenge} (5-shot): 1{,}172 grade-school science questions requiring reasoning beyond simple fact retrieval. Metric: normalized accuracy.
+    \item \textbf{MMLU} (5-shot): 14{,}042 questions across 57 subjects spanning STEM, humanities, social sciences, and professional domains. Metric: accuracy.
+    \item \textbf{GSM8K} (5-shot): 1{,}319 grade school math word problems. Metric: exact match (strict). Limited to 1{,}000 samples per evaluation run.
+\end{itemize}
+
+\end{document}
