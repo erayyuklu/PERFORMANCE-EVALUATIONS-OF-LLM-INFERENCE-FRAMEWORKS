@@ -10,13 +10,18 @@ Figure 1 -- "The free lunch":
     Data: benchmarking/results/unified_summary_qwen3.csv
 
 Figure 2 -- "Know your hardware":
-    Pushing KV-cache compression *past* FP8 with TurboQuant (down to 3-4 bits)
-    BUYS NO quality but LOSES throughput on the L4 -- the dequantization compute
-    overhead dominates. Data: benchmarking/results/turboquant_perf_quality_summary.csv
+    The KV-cache precision sweet spot. Decode latency (TPOT) at 64 concurrent
+    users across the full precision spectrum: FP16 (default) wastes memory
+    bandwidth, FP8 is the optimum, and pushing further with TurboQuant (3-4 bit)
+    pays a steep dequantization-compute penalty -- decode is up to ~2x slower
+    with no accuracy gain. Data: raw per-request custom_metrics from the
+    KV-cache (run_20260405_005704) and TurboQuant (run_20260511 / run_20260512)
+    load tests; quality from turboquant_perf_quality_summary.csv.
 
 Both charts: Qwen3-8B, single NVIDIA L4, ShareGPT load test via distributed Locust.
 """
 
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -168,77 +173,101 @@ def figure1_fp8_throughput():
 # --------------------------------------------------------------------------- #
 # FIGURE 2 -- TurboQuant hardware limit on L4
 # --------------------------------------------------------------------------- #
-def figure2_turboquant_limit():
-    df = pd.read_csv(RESULTS / "turboquant_perf_quality_summary.csv")
+# FIGURE 2 -- KV-cache precision sweet spot (decode latency)
+# --------------------------------------------------------------------------- #
+def _median_tpot(run, exp, users):
+    """Median decode latency (TPOT, ms/token) from raw per-request metrics.
 
-    # Pretty labels for each configuration
-    label_map = {
-        "qwen3_kv_fp8_baseline":       "FP8\n(8-bit KV)",
-        "qwen3_kv_turboquant_k3v4_nc": "TurboQuant\nK3·V4",
-        "qwen3_kv_turboquant_4bit_nc": "TurboQuant\n4-bit",
-        "qwen3_kv_turboquant_3bit_nc": "TurboQuant\n3-bit",
-        "qwen3_kv_turboquant_k8v4":    "TurboQuant\nK8·V4",
-    }
-    df = df[df.experiment.isin(label_map)].copy()
-    df["label"] = df["experiment"].map(label_map)
+    Some early runs wrote a stray private-use char (\\uf00d) between the user
+    count and '_custom_metrics', so we match the file with a tolerant regex.
+    """
+    folder = RESULTS / run / exp
+    pat = re.compile(rf"^{re.escape(exp)}__u{users}\D.*custom_metrics\.csv$")
+    files = [f for f in folder.glob(f"{exp}__u{users}*custom_metrics.csv")
+             if pat.match(f.name)]
+    if not files:
+        raise FileNotFoundError(f"{exp} u{users} custom_metrics not found")
+    df = pd.read_csv(files[0])
+    if "success" in df.columns:
+        df = df[df["success"] == True]
+    return float(df["tpot_ms"].median())
 
-    baseline_tp = float(
-        df.loc[df.experiment == "qwen3_kv_fp8_baseline",
-               "throughput_u128_tok_s"].iloc[0])
-    df["rel_tp"] = df["throughput_u128_tok_s"] / baseline_tp * 100.0
 
-    # Sort so the FP8 winner sits first, then descending throughput
-    df = df.sort_values("rel_tp", ascending=False).reset_index(drop=True)
+def figure2_kv_precision_sweetspot():
+    USERS = 64  # operating point where all six configs ran to completion
 
-    is_base = (df["experiment"] == "qwen3_kv_fp8_baseline").to_numpy()
-    colors = np.where(is_base, WIN, LOSS)
+    # KV-cache precision spectrum: least -> most compressed.
+    # (label, role, run, experiment)
+    spectrum = [
+        ("FP16\n(default)",      "base", "run_20260405_005704", "qwen3_kv_cache_auto"),
+        ("FP8\n(8-bit)",         "win",  "run_20260511_234500", "qwen3_kv_fp8_baseline"),
+        ("TurboQuant\nK8·V4",    "loss", "run_20260511_234500", "qwen3_kv_turboquant_k8v4"),
+        ("TurboQuant\n4-bit",    "loss", "run_20260511_234500", "qwen3_kv_turboquant_4bit_nc"),
+        ("TurboQuant\nK3·V4",    "loss", "run_20260512_090311", "qwen3_kv_turboquant_k3v4_nc"),
+        ("TurboQuant\n3-bit",    "loss", "run_20260512_090311", "qwen3_kv_turboquant_3bit_nc"),
+    ]
 
-    x = np.arange(len(df))
+    labels = [s[0] for s in spectrum]
+    tpot = np.array([_median_tpot(s[2], s[3], USERS) for s in spectrum])
+    role = [s[1] for s in spectrum]
+
+    role_color = {"base": BASE, "win": WIN, "loss": LOSS}
+    colors = [role_color[r] for r in role]
+
+    fp8_tpot = tpot[role.index("win")]
+    worst = tpot.max()
+
+    x = np.arange(len(spectrum))
     fig, ax = plt.subplots(figsize=(10.5, 6.2))
 
-    bars = ax.bar(x, df["rel_tp"], width=0.62, color=colors,
-                  edgecolor="white", linewidth=1.5, zorder=3)
+    bars = ax.bar(x, tpot, width=0.66, color=colors,
+                  edgecolor="white", linewidth=1.6, zorder=3)
 
-    # 100% reference line (FP8)
-    ax.axhline(100, color=WIN, lw=1.6, ls=(0, (5, 4)), zorder=2)
+    # FP8 reference line -- the floor everyone is compared against
+    ax.axhline(fp8_tpot, color=WIN, lw=1.6, ls=(0, (5, 4)), zorder=2)
+    ax.text(len(spectrum) - 0.4, fp8_tpot - 7, "FP8 floor",
+            color=WIN, fontsize=12, fontweight="bold", ha="right", va="top")
 
-    # Bar labels: relative throughput + quality (GSM8K) to show quality is flat
-    for xi, (_, row) in zip(x, df.iterrows()):
-        rel = row["rel_tp"]
-        # Percentage label above the bar
-        ax.text(xi, rel + 2.5, f"{rel:.0f}%", ha="center", va="bottom",
+    # Value labels (ms/token) + multiplier vs FP8 for the slow configs
+    for xi, (h, r) in zip(x, zip(tpot, role)):
+        ax.text(xi, h + 3, f"{h:.0f}", ha="center", va="bottom",
                 fontsize=14, fontweight="bold",
-                color=WIN if row["experiment"] == "qwen3_kv_fp8_baseline" else LOSS)
-        # GSM8K quality inside the bar -- adaptive y to keep inside short bars
-        gsm_y = min(rel * 0.08, 6)   # push label up a bit from bottom
-        ax.text(xi, gsm_y, f"GSM8K\n{row['gsm8k_flex']*100:.1f}%", ha="center",
-                va="bottom", fontsize=10.5, color="white", fontweight="semibold")
+                color=role_color[r])
+        if r == "loss":
+            ax.text(xi, h - 9, f"{h / fp8_tpot:.1f}×", ha="center", va="top",
+                    fontsize=12, fontweight="bold", color="white")
 
-    worst = df["rel_tp"].min()
-    ax.set_ylabel("Throughput @ 128 users\n(% of FP8 baseline)", fontsize=15.5,
-                  fontweight="semibold", labelpad=8)
-    ax.set_title("Pushing Past FP8 Backfires on the L4",
+    # "best" tag on FP8
+    win_i = role.index("win")
+    ax.annotate("fastest decode\n= the sweet spot",
+                xy=(win_i, tpot[win_i]),
+                xytext=(win_i + 0.05, tpot[win_i] + 46),
+                fontsize=13, fontweight="bold", color=WIN, ha="center",
+                arrowprops=dict(arrowstyle="-|>", color=WIN, lw=2.2,
+                                connectionstyle="arc3,rad=0.15"))
+
+    ax.set_ylabel("Decode latency  (ms / token)\nat 64 concurrent users",
+                  fontsize=15, fontweight="semibold", labelpad=8)
+    ax.set_title("FP8 Is the KV-Cache Sweet Spot",
                  fontsize=18.5, fontweight="bold", pad=42, loc="left")
     ax.text(0, 1.045,
-            "Qwen3-8B · 3–4-bit TurboQuant KV cache · quality stays flat, "
-            "but dequantization overhead crushes throughput",
-            transform=ax.transAxes, fontsize=13, color=MUTED)
+            "Qwen3-8B · FP16 wastes memory bandwidth · TurboQuant wastes compute "
+            "on dequantization · accuracy ~88% GSM8K throughout",
+            transform=ax.transAxes, fontsize=12.5, color=MUTED)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(df["label"], fontsize=12.5)
-    ax.set_ylim(0, 118)
-    ax.set_yticks([0, 25, 50, 75, 100])
+    ax.set_xticklabels(labels, fontsize=12.5)
+    ax.set_ylim(0, worst * 1.30)
     ax.grid(True, axis="y", color=GRID, lw=1.0, zorder=0)
     ax.set_axisbelow(True)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
 
-    # Takeaway callout -- positioned upper-center-right, clear of bars
+    # Takeaway callout
     ax.text(
-        0.97, 0.88,
-        f"Aggressive KV compression keeps only\n"
-        f"{worst:.0f}–{df[~is_base]['rel_tp'].max():.0f}% of FP8 throughput\n"
-        f"— with no accuracy gain to show for it.",
+        0.97, 0.93,
+        f"Going past FP8 makes decoding\nup to {worst / fp8_tpot:.1f}× slower"
+        f"\n— for no accuracy gain.",
         transform=ax.transAxes, fontsize=12.8, color=LOSS, ha="right", va="top",
         fontweight="semibold",
         bbox=dict(boxstyle="round,pad=0.7", facecolor="#fbeeea",
@@ -246,17 +275,19 @@ def figure2_turboquant_limit():
     )
 
     fig.tight_layout()
-    _save(fig, "phase1_fig2_turboquant_limit")
+    _save(fig, "phase1_fig2_kv_precision_sweetspot")
     plt.close(fig)
 
-    print(f"  [fig2] FP8 baseline = {baseline_tp:.0f} tok/s | "
-          f"TurboQuant retains {worst:.0f}%–{df[~is_base]['rel_tp'].max():.0f}%")
+    print(f"  [fig2] TPOT@u{USERS} (ms/tok): " +
+          ", ".join(f"{l.replace(chr(10), ' ')}={t:.0f}"
+                    for l, t in zip(labels, tpot)) +
+          f"  | worst {worst / fp8_tpot:.2f}x FP8")
 
 
 def main():
     print("Generating poster Phase-1 figures ->", OUTDIR)
     figure1_fp8_throughput()
-    figure2_turboquant_limit()
+    figure2_kv_precision_sweetspot()
     print("Done.")
 
 
