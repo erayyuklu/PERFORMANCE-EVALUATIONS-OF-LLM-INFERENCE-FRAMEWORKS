@@ -22,7 +22,16 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\labelenumi}{(\roman{enumi})}
 
-\graphicspath{{figures/}}
+\graphicspath{%
+  {figures/}%
+  {../../benchmarking/results/}%
+  {../../benchmarking/results/poster_figures/}%
+  {../../benchmarking/results/gemma4_vs_qwen3_comparison/}%
+  {../../benchmarking/results/analysis_output/figures/}%
+  {../../benchmarking/results/run_20260404_181323/}%
+  {../../benchmarking/results/run_20260405_005704/}%
+  {../../evaluation/agent-results/}%
+}
 
 \begin{document}
 
@@ -33,7 +42,8 @@
 {\Large \textbf{BO\u{G}AZI\c{C}I UNIVERSITY}}\\[0.4cm]
 {\large INSTITUTE FOR GRADUATE STUDIES IN SCIENCE AND ENGINEERING}\\[2cm]
 {\LARGE \textbf{PERFORMANCE EVALUATIONS OF}}\\[0.3cm]
-{\LARGE \textbf{LLM INFERENCE FRAMEWORKS}}\\[2cm]
+{\LARGE \textbf{LLM INFERENCE FRAMEWORKS}}\\[1.5cm]
+{\large \textbf{Final Report}}\\[1.5cm]
 {\large CMPE 492 --- Senior Design Project}\\[2cm]
 {\large \textbf{Eray Y\"{u}kl\"{u}}}\\[0.2cm]
 {\large \textbf{S\"{u}leyman Tolga Acar}}\\[2cm]
@@ -58,18 +68,29 @@ vLLM~\cite{kwon2023efficient} is an open-source, high-throughput inference engin
 
 Despite vLLM's widespread adoption, systematic empirical studies that isolate and quantify the effect of individual configuration parameters under realistic multi-user loads remain relatively scarce. Most published benchmarks focus on throughput at a single concurrency level, or on quantization accuracy, but do not jointly analyze latency distributions, cost efficiency, GPU resource utilization, and model quality across a comprehensive parameter matrix.
 
-This project addresses that gap by designing, executing, and analyzing a rigorous, repeatable benchmarking campaign for vLLM on commodity cloud GPU hardware.
+A second, equally pressing concern emerges one level above the serving engine: the application architecture. Deploying advanced agentic workflows---systems in which an LLM autonomously plans, calls tools, and executes multi-step tasks---at scale using commercial LLM APIs is financially prohibitive, while budget-friendly self-hosted models often lack the reasoning capacity for complex tasks. Bridging this gap requires both an optimized serving layer \emph{and} an architecture that allocates expensive reasoning capacity only where it is genuinely needed.
+
+This project addresses both gaps through a two-phase study. \textbf{Phase~1} optimizes self-hosted LLM serving on a single NVIDIA L4 GPU through systematic vLLM parameter sweeps, evaluating latency, throughput, and memory metrics alongside standard quality benchmarks. \textbf{Phase~2} then implements a hybrid \emph{Planner--Executor} agent architecture that combines the planning strengths of a commercial API with the low cost of the optimized self-hosted execution layer to achieve cost-efficient, high-accuracy task resolution. Together the two phases form a single narrative: Phase~1 establishes how cheaply and how fast a self-hosted model can be served, and Phase~2 exploits that optimized serving layer inside a real agentic application benchmarked on GAIA.
 
 \section{Project Goals}
 
-The primary goals of this project are:
+The project is organized into two complementary phases. The primary goals are:
 
+\textbf{Phase 1 --- Serving Optimization:}
 \begin{enumerate}
     \item Deploy vLLM on cloud GPU infrastructure (Google Kubernetes Engine and Lightning AI) in a reproducible and automatable manner.
-    \item Design a comprehensive set of benchmark experiments covering vLLM server-side parameters, quantization methods, model types, and input/output profiles.
+    \item Design a comprehensive set of benchmark experiments covering vLLM server-side parameters, model-weight quantization (FP16, FP8, AWQ/INT4), KV cache precision formats (FP16, FP8, and TurboQuant levels), model types, and input/output profiles.
     \item Measure a rich set of latency, throughput, resource utilization, and model quality metrics for each configuration.
     \item Identify which configurations lie on the Pareto frontier of the throughput--latency--cost--quality trade-off space.
-    \item Produce actionable recommendations for practitioners deploying LLMs on commodity cloud GPUs.
+\end{enumerate}
+
+\textbf{Phase 2 --- Asymmetric Agent:}
+\begin{enumerate}
+    \setcounter{enumi}{4}
+    \item Implement a hybrid Planner--Executor agent that routes high-level reasoning to a commercial API (the Planner) and bulk execution to the optimized self-hosted model (the Executor) deployed in Phase~1.
+    \item Benchmark five agent configurations on the GAIA Level~1 validation set, measuring accuracy, end-to-end task duration, and API cost per question.
+    \item Locate the Pareto-optimal agent architecture in the accuracy-versus-cost space.
+    \item Produce actionable recommendations for practitioners deploying both LLM serving stacks and agentic applications on commodity cloud GPUs.
 \end{enumerate}
 
 \section{Broad Impact}
@@ -78,9 +99,11 @@ The findings of this project have direct practical relevance for any organizatio
 
 Furthermore, the open-source benchmarking pipeline developed in this project---comprising a parameterized experiment runner, a Locust-based load generator with SSE streaming support, GPU and vLLM telemetry collectors, and a Jupyter analysis notebook---can be reused and extended by the research community for evaluating other inference engines, models, and hardware platforms.
 
+Phase~2 extends this impact to the application layer. By showing that a hybrid Planner--Executor agent can match roughly 80\% of a fully-commercial agent's GAIA accuracy at roughly one-tenth of the cost, the project gives practitioners a concrete blueprint for building affordable agentic systems: spend commercial-API budget only on planning, and offload the high-volume execution work to a self-hosted, FP8-optimized model.
+
 \section{Ethical Considerations}
 
-The project uses only publicly available model weights (DeepSeek-R1-Distill-Qwen-7B and Qwen2.5-7B-Instruct, both under open research licenses) and publicly available benchmark datasets (ShareGPT, ARC-Challenge, MMLU, GSM8K). No private user data was collected or processed. All experiments were conducted on cloud infrastructure with standard access controls. Cost overruns were guarded against by a GCP budget alert system with an automatic billing-disable Cloud Function. The evaluation benchmarks (ARC-Challenge, MMLU, GSM8K) are well-established academic datasets, and no benchmark contamination was introduced because the models were not fine-tuned during the study.
+The project uses only publicly available model weights (DeepSeek-R1-Distill-Qwen-7B, Qwen2.5-7B-Instruct, Qwen3-8B, and Gemma~4, all under open research licenses) and publicly available benchmark datasets (ShareGPT, ARC-Challenge, MMLU, GSM8K, and the GAIA validation set). No private user data was collected or processed. All experiments were conducted on cloud infrastructure with standard access controls. Cost overruns were guarded against by a GCP budget alert system with an automatic billing-disable Cloud Function. The evaluation benchmarks (ARC-Challenge, MMLU, GSM8K, GAIA) are well-established academic datasets, and no benchmark contamination was introduced because the models were not fine-tuned during the study. The Phase~2 agent executes model-generated Python code only inside a sandboxed cloud environment (E2B), preventing untrusted code from touching project infrastructure.
 
 % ============================================================
 \chapter{PROJECT DEFINITION AND PLANNING}
@@ -88,29 +111,39 @@ The project uses only publicly available model weights (DeepSeek-R1-Distill-Qwen
 
 \section{Project Definition}
 
-This project systematically evaluates the performance of vLLM, an open-source LLM inference engine, across a range of configuration parameters and model variants. The study centers on two 7-billion-parameter models---a reasoning model (DeepSeek-R1-Distill-Qwen-7B) and a non-reasoning model (Qwen2.5-7B-Instruct)---served on NVIDIA L4 GPUs (24 GB VRAM) hosted on Google Cloud Platform (GCP) and Lightning AI.
+This project systematically evaluates the performance of vLLM, an open-source LLM inference engine, across a range of configuration parameters and model variants, and then applies the optimized serving layer inside a cost-efficient agentic application. The study spans two phases.
+
+\textbf{Phase~1 (Serving Optimization)} centers on a progression of self-hosted 7--8B models---a reasoning model (DeepSeek-R1-Distill-Qwen-7B), a non-reasoning model (Qwen2.5-7B-Instruct), the dual-mode Qwen3-8B, and Google's Gemma~4 family---served on NVIDIA L4 GPUs (24~GB VRAM) hosted on Google Cloud Platform (GCP) and Lightning AI. Across these models the project sweeps model-weight quantization (FP16, FP8, AWQ/INT4), KV cache precision (default/FP16, FP8, and TurboQuant levels), scheduler and memory parameters, and input/output profiles.
+
+\textbf{Phase~2 (Asymmetric Agent)} builds a ReAct-style LangGraph agent on top of the Phase~1 serving stack. A high-capability commercial model (Gemini~3 Flash) acts as the Planner, decomposing a user query into a structured plan; a cost-efficient self-hosted model (an AWQ-quantized Gemma~4 26B served by vLLM) acts as the Executor, carrying out the plan with a suite of real tools (web search, web scraping, document parsing, and sandboxed Python execution). Five Planner/Executor combinations are benchmarked on the GAIA Level~1 validation set.
 
 The benchmarking pipeline is fully automated: a shell-script experiment runner iterates over a JSON-defined experiment matrix, restarts vLLM with new parameters for each experiment, triggers Locust load tests, collects per-request latency metrics via Server-Sent Events (SSE) parsing, captures GPU and vLLM telemetry, and stores all results as CSV files for offline analysis. A Jupyter notebook then performs statistical analysis and produces plots covering latency distributions, throughput, cost efficiency, GPU utilization, KV cache behavior, and model quality.
 
-Four experiment campaigns were defined:
+The principal experiment campaigns are:
 
 \begin{enumerate}
-    \item \textbf{Quantization --- Reasoning Model}: FP16 baseline, FP8, and BitsAndBytes (INT4) quantization on DeepSeek-R1.
-    \item \textbf{Quantization --- Non-Reasoning Model}: FP16 baseline and FP8 on Qwen2.5-7B-Instruct.
-    \item \textbf{I/O Profiles}: Six prompt categories (all, coding-only, creative-only, reasoning-only, short-input, long-input) to isolate the effect of input/output length on latency.
     \item \textbf{Server Tuning (Pilot)}: A preliminary sweep of vLLM scheduler parameters including \texttt{max-num-seqs}, \texttt{gpu-memory-utilization}, \texttt{enable-chunked-prefill}, and \texttt{enable-prefix-caching}.
+    \item \textbf{Weight Quantization --- Reasoning Model}: FP16 baseline, FP8, and BitsAndBytes (INT4) quantization on DeepSeek-R1.
+    \item \textbf{Weight Quantization --- Non-Reasoning Model}: FP16 baseline and FP8 on Qwen2.5-7B-Instruct.
+    \item \textbf{I/O Profiles}: Six prompt categories (all, coding-only, creative-only, reasoning-only, short-input, long-input) to isolate the effect of input/output length on latency.
+    \item \textbf{Reasoning vs.\ Non-Reasoning (Qwen3-8B)}: The dual-mode Qwen3-8B with \texttt{enable\_thinking} on and off under identical load.
+    \item \textbf{KV Cache Precision}: Default (auto) vs.\ FP8 KV cache on Qwen3-8B, scaling to 128 concurrent users.
+    \item \textbf{TurboQuant KV Cache}: Five KV-cache precision presets (FP8 baseline through 3-bit keys + 3-bit values) on Qwen3-8B.
+    \item \textbf{Model Comparison}: Gemma~4 E4B vs.\ Qwen3-8B at matched FP8 KV configuration.
+    \item \textbf{Agent Architecture (Phase~2)}: Five Planner/Executor configurations evaluated on GAIA Level~1.
 \end{enumerate}
 
 \section{Project Planning}
 
 \subsection{Project Time and Resource Estimation}
 
-The project spanned approximately 14 weeks and proceeded in three major phases:
+The project spanned two academic terms. Phase~1 occupied the first term (CMPE~491) and Phase~2 the second (CMPE~492), proceeding in four major stages:
 
 \begin{itemize}
     \item \textbf{Weeks 1--3}: Infrastructure setup (GKE cluster, vLLM deployment, Locust deployment, Prometheus + Grafana monitoring). Literature review of vLLM, PagedAttention, quantization methods, and LLM serving benchmarks.
     \item \textbf{Weeks 4--8}: Pilot experiments on Lightning AI (server tuning parameter sweep, prefix caching study). Development and refinement of the automated experiment runner, Locust streaming client, GPU monitor, and analysis notebook.
-    \item \textbf{Weeks 9--14}: Full experiment campaigns on GCP (quantization, I/O profiles). Quality evaluation using lm-evaluation-harness. Data analysis, visualization, and report writing.
+    \item \textbf{Weeks 9--14}: Full Phase~1 weight-quantization and I/O-profile campaigns on GCP, followed by the extended Phase~1 study on Qwen3-8B (reasoning vs.\ non-reasoning, FP8 KV cache, TurboQuant KV-cache levels) and the Gemma~4 vs.\ Qwen3 model comparison. Quality evaluation using lm-evaluation-harness.
+    \item \textbf{Weeks 15--24}: Phase~2 agent development (LangGraph Planner--Executor architecture, real tool suite, Postgres checkpointing, Langfuse observability), GAIA Level~1 evaluation across five agent configurations, cost analysis, poster preparation, and final report writing.
 \end{itemize}
 
 GPU compute costs were managed through a GCP budget alert ($12{,}500$ TRY limit) connected to a Pub/Sub topic and a Cloud Function that automatically disables billing when the threshold is reached.
@@ -121,13 +154,14 @@ The project was considered successful upon meeting the following criteria:
 
 \begin{enumerate}
     \item A fully automated, reproducible experiment pipeline capable of running any experiment defined in a JSON configuration file.
-    \item At least 2{,}000 successfully processed benchmark requests with a 0\% error rate.
+    \item At least 2{,}000 successfully processed benchmark requests with a near-zero error rate.
     \item Quantitative characterization of at least three vLLM parameters across at least two concurrency levels.
     \item Quality evaluation results (lm-evaluation-harness scores) for all quantization variants.
     \item A unified analysis notebook producing publication-quality plots covering all metric categories.
+    \item A working Planner--Executor agent benchmarked on GAIA Level~1, with at least one hybrid configuration demonstrating a substantial cost reduction relative to the all-commercial baseline at comparable accuracy.
 \end{enumerate}
 
-All criteria were met. The final campaign processed 2{,}041 requests at 100\% success rate.
+All criteria were met. The Phase~1 weight-quantization campaign processed 2{,}041 requests at 100\% success rate; the Qwen3-8B campaigns added 2{,}274 requests (99.7\% success) and the TurboQuant campaign a further 1{,}093 requests. In Phase~2, the hybrid Planner--Executor agent reached 67.9\% GAIA Level~1 accuracy at roughly one-tenth the cost of the all-commercial baseline (84.9\%).
 
 \subsection{Risk Analysis}
 
@@ -154,7 +188,7 @@ Model download failures (HuggingFace) & Low & Low & Cache model weights on persi
 
 \subsection{Team Work}
 
-The project was conducted by two students. Infrastructure setup, Kubernetes manifests, and the GCP/Lightning AI deployment scripts were developed collaboratively. Eray Y\"{u}kl\"{u} led the development of the Locust load generator, SSE streaming parser, and the per-request metrics collection pipeline. S\"{u}leyman Tolga Acar led the experiment runner automation, GPU/vLLM telemetry collection, and the Jupyter analysis notebook. Both students jointly designed the experiment matrix, ran the experiments, and contributed to the analysis and report writing.
+The project was conducted by two students. Infrastructure setup, Kubernetes manifests, and the GCP/Lightning AI deployment scripts were developed collaboratively. Eray Y\"{u}kl\"{u} led the development of the Locust load generator, SSE streaming parser, and the per-request metrics collection pipeline. S\"{u}leyman Tolga Acar led the experiment runner automation, GPU/vLLM telemetry collection, and the Jupyter analysis notebook. Both students jointly designed the experiment matrix, ran the experiments, and contributed to the analysis and report writing. In Phase~2, the LangGraph agent (graph definition, planner/executor modes, real-tool suite, Postgres checkpointing, and Langfuse observability) and the GAIA evaluation harness were likewise developed jointly, with the agent load-testing and cost-accounting work building directly on the Phase~1 telemetry pipeline.
 
 % ============================================================
 \chapter{RELATED WORK}
@@ -178,7 +212,7 @@ PagedAttention~\cite{kwon2023efficient} addresses fragmentation. Prefix caching~
 
 Model quantization reduces the numerical precision of weights and activations, decreasing both memory footprint and, on hardware with native low-precision support, computation time. FP8 quantization is natively accelerated on NVIDIA H100 and, partially, on L4 GPUs. AWQ~\cite{awq} and GPTQ~\cite{gptq} are popular 4-bit weight-only quantization schemes that apply calibration-based rounding to minimize accuracy loss. BitsAndBytes~\cite{bnb} provides a library-level INT4/INT8 quantization compatible with any CUDA GPU.
 
-Prior work~\cite{dettmers2022llmint8} demonstrates that INT8 quantization introduces negligible accuracy loss for most tasks, while INT4 methods show greater variance. This project extends these findings to the specific context of LLM serving under concurrent load, measuring both the latency impact and the quality impact across multiple benchmarks.
+Prior work~\cite{dettmers2022llmint8} demonstrates that INT8 quantization introduces negligible accuracy loss for most tasks, while INT4 methods show greater variance. This project extends these findings to the specific context of LLM serving under concurrent load, measuring both the latency impact and the quality impact across multiple benchmarks. The Phase~2 Executor uses an AWQ 4-bit quantized Gemma~4 26B model, chosen because AWQ's calibration-based weight-only scheme preserves accuracy well while shrinking the model enough to serve comfortably on a single L4.
 
 \section{LLM Serving Benchmarks}
 
@@ -188,7 +222,19 @@ This project uses Locust as the load generator rather than the vLLM benchmark to
 
 \section{Reasoning Models}
 
-DeepSeek-R1~\cite{deepseek} is a reasoning-capable model that generates a chain-of-thought \texttt{<think>...</think>} block before producing its final answer. This significantly increases the number of output tokens per request compared to a non-reasoning model answering the same question directly, with corresponding effects on E2E latency and throughput. This project is among the first to systematically compare the serving performance of reasoning and non-reasoning 7B models under identical load conditions.
+DeepSeek-R1~\cite{deepseek} is a reasoning-capable model that generates a chain-of-thought \texttt{<think>...</think>} block before producing its final answer. This significantly increases the number of output tokens per request compared to a non-reasoning model answering the same question directly, with corresponding effects on E2E latency and throughput. This project is among the first to systematically compare the serving performance of reasoning and non-reasoning 7B models under identical load conditions. The later Qwen3-8B~\cite{qwen3} model exposes both modes through a single \texttt{enable\_thinking} switch, allowing a clean within-model comparison.
+
+\section{KV Cache Quantization}
+
+Beyond quantizing model weights, the KV cache itself can be stored at reduced precision. vLLM supports an FP8 KV cache (\texttt{--kv-cache-dtype fp8}) that halves the per-token KV footprint relative to the default 16-bit cache, allowing more concurrent sequences to fit in a fixed VRAM budget. More aggressive schemes such as TurboQuant compress keys and values to 4-bit or even 3-bit representations with optional norm correction. The central trade-off is between memory savings (which can raise effective concurrency) and the per-token dequantization compute added to the decode path. On GPUs where the KV cache dominates VRAM, this trade-off favours compression; on smaller models or compute-bound hardware it can invert. This project measures that trade-off directly on the L4 for an 8B model.
+
+\section{Agentic LLM Systems and Cost Routing}
+
+Agentic systems wrap an LLM in a loop that interleaves reasoning with external tool calls. The ReAct paradigm~\cite{react} formalises this as alternating ``thought'' and ``action'' steps, and frameworks such as LangGraph~\cite{langgraph} provide stateful graph abstractions for building such agents in production. A recurring concern is cost: routing every reasoning and execution step to a frontier commercial API is expensive at scale. FrugalGPT~\cite{frugalgpt} showed that cascading and routing queries across models of different costs can cut API spend dramatically while preserving accuracy. The Planner--Executor (or ``big brain, small hands'') pattern is a specific instance of this idea: a strong, expensive model produces a plan, and a cheaper model carries it out. Phase~2 of this project realises this pattern with a commercial Planner (Gemini~3 Flash) and a self-hosted, FP8/AWQ-optimised Executor served by the Phase~1 vLLM stack, and quantifies the resulting accuracy-versus-cost trade-off.
+
+\section{Agent Benchmarks: GAIA}
+
+GAIA~\cite{gaia} is a benchmark of real-world questions for general AI assistants that require multi-step reasoning, web browsing, file handling, and code execution to answer. Unlike knowledge benchmarks such as MMLU, GAIA questions have unambiguous, exact-match answers but demand correct tool orchestration to reach them, making the benchmark a faithful proxy for agentic capability. Phase~2 uses the GAIA Level~1 validation split (53 questions) to compare agent architectures on accuracy, task duration, and cost.
 
 % ============================================================
 \chapter{METHODOLOGY}
@@ -237,6 +283,16 @@ KV cache utilization percentage (\texttt{vllm:kv\_cache\_usage\_perc}), number o
 
 Model quality is evaluated offline using \texttt{lm-evaluation-harness}~\cite{lmeval} on three standard benchmarks: ARC-Challenge (5-shot, normalized accuracy), MMLU (5-shot, accuracy), and GSM8K (5-shot, exact match). Quality evaluations are run after each quantization variant is deployed to the same vLLM endpoint used for load testing, ensuring consistency.
 
+\subsection{Agent Evaluation Metrics (Phase~2)}
+
+The Phase~2 agent is evaluated on the GAIA Level~1 validation set (53 questions) using three metrics per configuration:
+
+\textbf{Accuracy} is the fraction of questions answered correctly under GAIA's exact-match scorer, which normalizes case and whitespace, strips currency/unit symbols, and canonicalizes numbers before comparison.
+
+\textbf{Task Duration} is the mean wall-clock time (seconds) for the agent to resolve a single question end-to-end, including all planner calls, executor calls, and tool invocations.
+
+\textbf{Cost per Question} combines commercial-API token usage (priced at the Gemini~3 Flash published rate) with self-hosted token usage (priced at the amortized L4 GPU rate derived from Phase~1 throughput). We report both a raw cost (charging only for billable commercial-API tokens) and a \emph{cost-adjusted} figure that additionally imputes a price to self-hosted Executor tokens, so that fully self-hosted configurations are not credited as free.
+
 \section{Statistical Reporting}
 
 Raw averages can be misleading for latency distributions, which are typically right-skewed. All latency metrics are reported as P50 (median), P95, and P99 in addition to the mean. P99 is of particular operational significance: with 1{,}000 requests per minute, a P99 of 5 seconds means roughly 10 users per minute experience a 5-second wait---a direct SLA concern.
@@ -251,6 +307,9 @@ Before running experiments, the following hypotheses were formulated:
     \item The reasoning model will have comparable TTFT but much higher E2E latency than the non-reasoning model due to chain-of-thought output.
     \item Prefix caching will reduce TTFT by more than 50\% for workloads with shared system prompts at high concurrency.
     \item KV cache utilization will remain low (below 20\%) for a 7B model on a 24 GB GPU even at high concurrency, making \texttt{gpu-memory-utilization} a non-bottleneck parameter.
+    \item An FP8 KV cache will unlock substantially higher concurrency than the default cache by halving the per-token KV footprint, with the largest gains appearing at the highest tested concurrency.
+    \item Aggressive KV-cache compression (TurboQuant) will save little VRAM on an 8B model because the cache is a small fraction of total VRAM, and its dequantization overhead will slow per-token decode.
+    \item A hybrid Planner--Executor agent (commercial Planner, self-hosted Executor) will retain most of the accuracy of an all-commercial agent while cutting cost by roughly an order of magnitude.
 \end{itemize}
 
 % ============================================================
@@ -294,7 +353,7 @@ Before running experiments, the following hypotheses were formulated:
 
 \section{System Architecture}
 
-The system is organized into five major subsystems: Infrastructure, Load Generator, Experiment Runner, Telemetry Collection, and Analysis Pipeline.
+The system is organized into six major subsystems: Infrastructure, Load Generator, Experiment Runner, Telemetry Collection, Analysis Pipeline, and (for Phase~2) the Agent Application.
 
 \subsection{Infrastructure}
 
@@ -351,6 +410,19 @@ The Jupyter notebook (\texttt{analyze\_results.ipynb}) loads all CSVs from both 
     \item Quality bar charts and heatmaps from lm-evaluation-harness scores.
     \item Performance vs.\ quality scatter plots.
 \end{itemize}
+
+\subsection{Agent Application (Phase~2)}
+
+The Phase~2 agent is a ReAct-style graph built with LangGraph and exposed through a FastAPI service. Its design follows the asymmetric ``big brain, small hands'' principle: an expensive, high-capability \emph{Planner} produces a structured plan, and a cheap, self-hosted \emph{Executor} carries it out using tools.
+
+\begin{itemize}
+    \item \textbf{Planner}: By default a commercial model (Gemini~3 Flash via Vertex AI). Given a user query it identifies constraints (required output format, rounding, units), decomposes the task into sequential steps, and specifies a verification strategy. It is called sparingly---ideally once per query.
+    \item \textbf{Executor}: By default the self-hosted Gemma~4 26B (AWQ 4-bit) served by the Phase~1 vLLM deployment through its OpenAI-compatible API. It consumes the plan and executes it step by step, calling tools and adapting when a step fails. It handles the overwhelming majority of token volume, where the near-zero marginal cost of self-hosting dominates.
+    \item \textbf{Tool suite}: \texttt{web\_search} (DuckDuckGo), \texttt{visit\_webpage} (HTML-to-markdown scraping), \texttt{read\_document} (multi-format file parsing), and \texttt{python\_execute} (sandboxed code execution in an E2B cloud sandbox). A ``mock'' tool mode returns static fixtures for load-testing the serving path without external dependencies, while a ``real'' mode performs live calls for GAIA evaluation.
+    \item \textbf{State and observability}: An optional Postgres checkpointer (\texttt{AsyncPostgresSaver}) persists conversation state, and every planner/executor/tool span is traced to Langfuse for token accounting and debugging.
+\end{itemize}
+
+Five modes are selectable at deploy time via a single \texttt{MODE} setting, forming the experimental matrix for Phase~2: \texttt{large-planner-executor} (commercial Planner + commercial Executor, the quality ceiling), \texttt{planner-executor} (commercial Planner + self-hosted Executor, the proposed hybrid), \texttt{planner-only} (commercial model used directly), \texttt{single-agent} (self-hosted model used directly), and \texttt{small-planner-executor} (self-hosted Planner + self-hosted Executor, the fully-local floor).
 
 \section{Information Structure}
 
@@ -440,6 +512,16 @@ A Cloud Function (\texttt{budget/function/main.py}) is triggered via Pub/Sub whe
 
 The quality evaluator (\texttt{evaluation/run\_eval.sh}) discovers the vLLM service endpoint via \texttt{kubectl}, health-checks it, and invokes \texttt{lm\_eval} in \texttt{local-completions} mode against the vLLM API. For reasoning models, \texttt{enable\_thinking=true} is passed to ensure the chain-of-thought is generated but the answer is extracted from the content field. \texttt{max\_gen\_toks=4096} is set to prevent truncated answers for long reasoning chains.
 
+\subsection{Phase~2 Agent Application}
+
+The agent is implemented as a FastAPI service (\texttt{agent/app/main.py}) wrapping a LangGraph graph (\texttt{agent/app/graph.py}). Two factory functions, \texttt{\_create\_planner\_llm} and \texttt{\_create\_executor\_llm}, instantiate the right model for the active \texttt{MODE}: a \texttt{ChatVertexAI} client for the commercial Gemini Planner/Executor, or a \texttt{ChatOpenAI} client pointed at the in-cluster vLLM service for the self-hosted side. The planner is prompted to emit a structured plan (constraints, ordered steps, and a verification strategy) tailored to GAIA-style tasks, and the executor is prompted with strict rules---most importantly a ``Python-first'' rule that forbids doing arithmetic or data parsing in-context and instead routes it to the \texttt{python\_execute} tool.
+
+Tools are provided in two interchangeable suites. The \emph{mock} suite (\texttt{mock\_tools.py}) returns static fixtures served by a separate \texttt{mock-tools} microservice, used to load-test the serving path deterministically. The \emph{real} suite (\texttt{real\_tools.py}) performs live work: \texttt{web\_search} queries DuckDuckGo with retry/backoff, \texttt{visit\_webpage} fetches and converts pages to markdown (truncated to 20{,}000 characters), \texttt{read\_document} parses PDF/DOCX/CSV/Excel files, and \texttt{python\_execute} runs model-generated code inside an ephemeral E2B sandbox, uploading any per-session files first. State is persisted with an \texttt{AsyncPostgresSaver} checkpointer, and all spans are exported to Langfuse for token-level cost accounting.
+
+\subsection{GAIA Evaluation Harness}
+
+The GAIA runner (\texttt{evaluation/gaia/run\_gaia.py}) loads the gated \texttt{gaia-benchmark/GAIA} validation split, filters to the requested levels, and dispatches each question to the agent API with a bounded concurrency (default~4) and a per-question timeout. Answers are graded by an exact-match scorer (\texttt{scorer.py}) that lowercases, strips whitespace, normalizes numbers, and removes currency/unit symbols before comparison. Each run writes a per-question \texttt{results.jsonl} and an aggregate \texttt{summary.json} with overall and per-level accuracy. Token-usage and cost figures for each configuration are reconciled from Langfuse traces and summarized into the \texttt{comparison.csv} and \texttt{comparison\_cost\_adjusted.csv} tables used in the analysis.
+
 \section{Testing}
 
 \subsection{Unit-Level Verification}
@@ -486,7 +568,10 @@ The 100\% success rate across 2{,}041 requests (all experiments combined) provid
 \chapter{RESULTS}
 % ============================================================
 
-This chapter presents the results of all benchmark campaigns. All experiments achieved a 100\% request success rate. The total number of successfully processed requests across all campaigns was 2{,}041.
+This chapter presents the results of all benchmark campaigns. It is organized in two parts. \textbf{Part~I (Phase~1)} covers the serving-optimization experiments: the pilot server-parameter sweep, weight quantization on the DeepSeek-R1 and Qwen2.5 7B models, I/O-profile analysis, and the extended studies on Qwen3-8B (reasoning mode, FP8 KV cache, and TurboQuant) and the Gemma~4 vs.\ Qwen3 comparison. \textbf{Part~II (Phase~2)} covers the GAIA Level~1 evaluation of the Planner--Executor agent. All serving experiments achieved at least a 99.7\% request success rate; the Phase~1 campaigns together processed well over 5{,}000 successfully completed requests (2{,}041 in the initial 7B weight-quantization campaign, 2{,}274 in the Qwen3-8B campaigns, and 1{,}093 in the TurboQuant campaign).
+
+\section*{Part I --- Phase 1: Serving Optimization}
+\addcontentsline{toc}{section}{Part I --- Phase 1: Serving Optimization}
 
 \section{Pilot Study: vLLM Server Parameter Sweep}
 
@@ -571,6 +656,13 @@ BitsAndBytes & 689 & 138 & 200{,}770 & 136 \\
 \end{tabular}
 \label{table:quant_reasoning_u16}
 \end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{01_ttft_violin_quantization_reasoning.png}
+\caption{TTFT distribution by quantization method for the reasoning model (DeepSeek-R1). FP8 shifts the distribution lower; BitsAndBytes shifts it higher.}
+\label{fig:quant_reasoning_ttft}
+\end{figure}
 
 FP8 reduces TTFT P50 by 28\%, TPOT P50 by 35\%, and E2E P50 by 35\% compared to the FP16 baseline. At 64 concurrent users, the TPOT improvement is $111 \to 76$ ms/tok ($-31\%$). These are large gains for a single configuration change.
 
@@ -678,6 +770,13 @@ Qwen2.5 FP8 & \$1.91 & --- \\
 
 The lowest cost configuration is DeepSeek-R1 FP8 at u=64: \$0.47/M output tokens. This is 6.85$\times$ cheaper than BitsAndBytes at u=16 (\$3.22/M). Higher concurrency (more requests batched together per GPU forward pass) is the single biggest driver of cost reduction, followed by FP8 quantization.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{11_cost_efficiency.png}
+\caption{Cost per million output tokens vs.\ concurrency across configurations. Cost falls steeply with concurrency; FP8 is consistently cheaper than the FP16 baseline.}
+\label{fig:cost_efficiency}
+\end{figure}
+
 \section{Quality Evaluation}
 
 \begin{table}[htbp]
@@ -703,6 +802,20 @@ FP8 quantization causes negligible quality degradation: the maximum reduction is
 
 Qwen2.5 outperforms DeepSeek-R1 on all three benchmarks, reflecting its larger training dataset and more recent training methodology.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{12_quality_evaluation_bars.png}
+\caption{lm-evaluation-harness scores (ARC-Challenge, MMLU, GSM8K) by model and quantization. FP8 tracks the FP16 baseline closely across all benchmarks.}
+\label{fig:quality_bars}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{15_performance_vs_quality_tradeoff.png}
+\caption{Performance--quality trade-off. FP8 sits on the favourable frontier: near-baseline quality at materially lower latency and cost.}
+\label{fig:perf_quality}
+\end{figure}
+
 \section{Data Completeness}
 
 Some experiments have partial data due to infrastructure issues encountered during the campaign:
@@ -726,13 +839,192 @@ I/O Profiles & all (u16 and u64) & \checkmark & \checkmark & \checkmark \\
 
 Full per-request custom metrics (TTFT, TPOT, ITL) were available for the I/O profiles campaign and for key quantization configurations. Some early quantization runs captured only Locust aggregate statistics, which still provide sufficient data for the primary latency and throughput comparisons.
 
+\section{Extended Study: Qwen3-8B Reasoning vs.\ Non-Reasoning}
+
+After the initial 7B campaigns, the study moved to Qwen3-8B, a dual-mode model that exposes reasoning via a single \texttt{enable\_thinking} switch. This allows a clean within-model comparison of the two modes under identical load (run \texttt{run\_20260404\_181323}, 16/32/64 concurrent users).
+
+\begin{table}[htbp]
+\caption{Qwen3-8B reasoning vs.\ non-reasoning, P50 latencies.}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Metric} & \textbf{Reasoning} & \textbf{Non-Reasoning} & \textbf{Change} \\
+\hline
+TTFT P50 (u16) & 460 ms & 421 ms & $-8\%$ \\
+TPOT P50 (u16) & 62.1 ms/tok & 60.2 ms/tok & $-3\%$ \\
+E2E P50 (u16) & 92{,}313 ms & 49{,}705 ms & $-46\%$ \\
+\hline
+E2E P50 (u32) & 127{,}119 ms & 58{,}777 ms & $-54\%$ \\
+E2E P50 (u64) & 166{,}331 ms & 94{,}475 ms & $-43\%$ \\
+\hline
+\end{tabular}
+\label{table:qwen3_reasoning}
+\end{table}
+
+Non-reasoning mode produces 43--54\% lower E2E latency at every concurrency level because it omits the chain-of-thought tokens. TTFT and TPOT are comparable at low concurrency, but at u64 the non-reasoning configuration's TTFT degrades sharply due to queue buildup as more (shorter) requests compete for KV cache. Throughput tells the same story: non-reasoning scales to 575 tok/s at u64 (\$0.76/M tokens) while reasoning drops to 320 tok/s as longer sequences trigger preemptions. Critically, quality is essentially identical between modes (ARC 0.656/0.656, MMLU 0.786/0.786, GSM8K 0.899/0.896), so for latency-sensitive deployments the non-reasoning mode is the better operating point on these benchmarks.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{../../benchmarking/results/run_20260404_181323/e2e_boxplot.png}
+\caption{End-to-end latency distribution, Qwen3-8B reasoning vs.\ non-reasoning. The reasoning mode's chain-of-thought roughly doubles E2E latency.}
+\label{fig:qwen3_e2e}
+\end{figure}
+
+\section{KV Cache Precision: Default vs.\ FP8 (Qwen3-8B)}
+
+A second Qwen3-8B campaign (\texttt{run\_20260405\_005704}) compared the default (16-bit) KV cache against an FP8 KV cache, scaling concurrency up to 128 users.
+
+\begin{table}[htbp]
+\caption{Qwen3-8B KV cache: default (auto) vs.\ FP8, selected metrics.}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Metric} & \textbf{Auto} & \textbf{FP8} & \textbf{Change} \\
+\hline
+TTFT P50 (u64) & 30{,}433 ms & 405 ms & $-99\%$ \\
+TTFT P50 (u128) & 143{,}695 ms & 36{,}216 ms & $-75\%$ \\
+E2E P50 (u128) & 188{,}400 ms & 124{,}353 ms & $-34\%$ \\
+Throughput (u128) & 313 tok/s & 901 tok/s & $+188\%$ \\
+Cost (u128) & \$1.40/M & \$0.49/M & $-65\%$ \\
+Waiting reqs (u128) & 61.2 & 22.5 & $-63\%$ \\
+\hline
+\end{tabular}
+\label{table:qwen3_kv}
+\end{table}
+
+The FP8 KV cache is the single most impactful Phase~1 lever at high concurrency. By halving the per-token KV footprint, it admits far more concurrent sequences before queuing: at u64 the default cache's TTFT collapses to 30~seconds while FP8 holds 405~ms, and at u128 FP8 sustains 901 tok/s---roughly $3\times$ the default's 313 tok/s---reaching the lowest cost of \$0.49/M tokens. Quality is unaffected (ARC 0.660, MMLU 0.797, GSM8K 0.879). This confirms the hypothesis that FP8 KV cache unlocks concurrency with negligible quality cost, and it became the default serving configuration for all subsequent work, including the Phase~2 Executor.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{../../benchmarking/results/run_20260405_005704/kv_cache_improvement.png}
+\caption{FP8 KV cache improvement over the default cache (Qwen3-8B). Gains are largest at the highest concurrency, where the default cache saturates and queues.}
+\label{fig:qwen3_kv_improvement}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{../../benchmarking/results/run_20260405_005704/pareto_frontier.png}
+\caption{Throughput vs.\ latency Pareto frontier, default vs.\ FP8 KV cache. FP8 dominates the frontier across concurrency levels.}
+\label{fig:qwen3_kv_pareto}
+\end{figure}
+
+\section{TurboQuant KV-Cache Compression}
+
+Having established FP8 as a strong baseline, the study tested whether more aggressive KV-cache compression (TurboQuant) could push further. Five presets were compared on Qwen3-8B (runs \texttt{run\_20260511\_234500} and \texttt{run\_20260512\_090311}) at 32/64/128 users: an FP8 baseline, \texttt{k8v4} (FP8 keys + 4-bit values), \texttt{4bit\_nc} (4-bit keys+values with norm correction), \texttt{k3v4\_nc} (3-bit keys + 4-bit values), and \texttt{3bit\_nc} (3-bit keys + 3-bit values).
+
+\begin{table}[htbp]
+\caption{TurboQuant vs.\ FP8 KV baseline (Qwen3-8B): throughput and cost.}
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Config} & \textbf{u128 tok/s} & \textbf{u128 \$/M} & \textbf{TPOT P50 vs.\ base} \\
+\hline
+fp8 (baseline) & \textbf{1{,}097} & \textbf{\$0.40} & --- \\
+tq k8v4 & 292 & \$1.50 & $+28\%$ \\
+tq 4bit\_nc & 575 & \$0.76 & $+59\%$ \\
+tq k3v4\_nc & 760 & \$0.58 & $+88\%$ \\
+tq 3bit\_nc & 392 & \$1.12 & $+106\%$ \\
+\hline
+\end{tabular}
+\label{table:turboquant}
+\end{table}
+
+The results are clear and somewhat counter-intuitive: on the L4 with an 8B model, TurboQuant is \emph{not} worth it. Three findings dominate. First, the VRAM saving is tiny ($\sim$400~MiB out of 20.6~GiB) because the KV cache is only a small fraction of total VRAM---weights, activations, and allocator overhead dominate---so the compression does not free enough headroom to admit more concurrent requests (mean KV usage at u128 sits at 90--93\% for every variant including the baseline). Second, the dequantization compute lands directly on the decode path, inflating TPOT by 28--106\% and roughly doubling ITL on the 3-bit variants. Third, quality is essentially unchanged ($\pm$2.5~pp on ARC and GSM8K), so the compression buys no quality headroom either. The one niche advantage is TTFT under saturation: at u128 the smaller KV blocks let new requests admit 9--28\% faster, so a TurboQuant preset is defensible only when first-token responsiveness at extreme load matters more than throughput. Otherwise FP8 KV remains the best operating point at \$0.40/M tokens.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{turboquant_pct_change_vs_baseline.png}
+\caption{Percentage change of each TurboQuant preset relative to the FP8 KV baseline. Per-token decode (TPOT/ITL) regresses uniformly; throughput falls.}
+\label{fig:turboquant_pct}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{turboquant_pareto_frontier.png}
+\caption{Throughput vs.\ P95 TTFT Pareto frontier for TurboQuant presets. The FP8 baseline dominates on throughput; TurboQuant only wins on admit-time TTFT under saturation.}
+\label{fig:turboquant_pareto}
+\end{figure}
+
+\section{Model Comparison: Gemma~4 vs.\ Qwen3-8B}
+
+Finally, the serving study compared two model families at matched FP8 KV configuration (run \texttt{run\_20260416\_010036} vs.\ the Qwen3 FP8 run): Google's Gemma~4 E4B against Qwen3-8B.
+
+\begin{table}[htbp]
+\caption{Gemma~4 E4B vs.\ Qwen3-8B (FP8 KV), selected metrics.}
+\centering
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Metric} & \textbf{Gemma~4 E4B} & \textbf{Qwen3-8B} \\
+\hline
+TTFT P50 (u128) & 525 ms & 36{,}216 ms \\
+TPOT P50 (u128) & 102.0 ms/tok & 124.7 ms/tok \\
+Throughput (u128) & 1{,}880 tok/s & \textbf{3{,}599 tok/s} \\
+Cost (u128) & \$0.23/M & \textbf{\$0.12/M} \\
+ARC-Challenge & 0.31 & \textbf{0.65} \\
+GSM8K & 0.70 & \textbf{0.88} \\
+\hline
+\end{tabular}
+\label{table:gemma_qwen}
+\end{table}
+
+The two models occupy different niches. Gemma~4 E4B is extraordinarily resilient to queueing---at u128 it holds a 525~ms TTFT where Qwen3 spikes to an unusable 36.2~seconds---and has slightly better TPOT at every level. But Qwen3-8B delivers far higher peak throughput (3{,}599 vs.\ 1{,}880 tok/s, making it nearly twice as cost-effective at \$0.12/M) and decisively higher quality (ARC 65\% vs.\ 31\%, GSM8K 88\% vs.\ 70\%). For a throughput- and quality-oriented serving backend, Qwen3-8B is preferred; Gemma~4's stability advantage is most valuable for latency-critical, interactive workloads.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{../../benchmarking/results/gemma4_vs_qwen3_comparison/throughput_cost.png}
+\caption{Throughput and cost, Gemma~4 E4B vs.\ Qwen3-8B (FP8 KV). Qwen3 reaches far higher peak throughput and lower cost per token.}
+\label{fig:gemma_qwen_throughput}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{../../benchmarking/results/gemma4_vs_qwen3_comparison/quality_comparison.png}
+\caption{Quality comparison, Gemma~4 E4B vs.\ Qwen3-8B. Qwen3 substantially outscores Gemma~4 on ARC-Challenge and GSM8K.}
+\label{fig:gemma_qwen_quality}
+\end{figure}
+
+\section*{Part II --- Phase 2: Asymmetric Agent on GAIA}
+\addcontentsline{toc}{section}{Part II --- Phase 2: Asymmetric Agent on GAIA}
+
+Phase~2 evaluates five agent configurations on the GAIA Level~1 validation set (53 multi-step questions requiring web search, file handling, and code execution). The Executor, where self-hosted, is the AWQ 4-bit Gemma~4 26B served by the FP8-optimized vLLM stack from Phase~1; the Planner, where commercial, is Gemini~3 Flash. Each configuration is measured on accuracy, mean task duration, and cost per question.
+
+\begin{table}[htbp]
+\caption{GAIA Level~1 results across agent configurations. Cost is the cost-adjusted figure (self-hosted Executor tokens imputed a price).}
+\centering
+\begin{tabular}{|p{4.6cm}|r|r|r|}
+\hline
+\textbf{Configuration} & \textbf{Accuracy} & \textbf{Cost/Q} & \textbf{Duration} \\
+\hline
+Large-Planner-Executor (Gemini + Gemini) & \textbf{84.9\%} & \$0.1207 & 356 s \\
+Planner-Only (Gemini direct) & 73.6\% & \$0.0363 & 319 s \\
+\textbf{Planner-Executor (Gemini + Gemma~4)} & \textbf{67.9\%} & \textbf{\$0.0110} & 278 s \\
+Single-Agent (Gemma~4 direct) & 50.9\% & \$0.0050 & 106 s \\
+Small-Planner-Executor (Gemma~4 + Gemma~4) & 39.6\% & \$0.0021 & 651 s \\
+\hline
+\end{tabular}
+\label{table:gaia}
+\end{table}
+
+The headline result is the \textbf{hybrid Planner--Executor} configuration (commercial Gemini Planner + self-hosted Gemma~4 Executor). It achieves 67.9\% accuracy---about 80\% of the all-commercial ceiling of 84.9\%---while costing \$0.0110 per question, roughly \textbf{one-tenth} of the all-commercial baseline's \$0.1207. In other words, offloading the high-volume execution work to the self-hosted model preserves four-fifths of the quality at one-tenth of the cost, placing the hybrid on the Pareto frontier of the accuracy-versus-cost space.
+
+The other configurations frame this result. The all-commercial \texttt{Large-Planner-Executor} sets the quality ceiling but is by far the most expensive. \texttt{Planner-Only}, calling Gemini directly without a separate executor, is cheaper but loses 11~pp of accuracy---confirming that an explicit plan-then-execute decomposition helps. At the low end, the fully self-hosted \texttt{Single-Agent} reaches a respectable 50.9\% at near-zero marginal cost, while the fully self-hosted \texttt{Small-Planner-Executor} actually \emph{regresses} to 39.6\% and the longest duration (651~s): a weak planner produces verbose, sometimes misleading plans that the same weak model then struggles to execute, so the two-model overhead is not repaid. The clear lesson is that planning quality is what must be bought from the frontier model; execution can be safely and cheaply self-hosted.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{../../evaluation/agent-results/phase2_pareto_cost_adjusted_percentage.png}
+\caption{Phase~2 accuracy vs.\ cost-reduction trade-off on GAIA Level~1. The hybrid Planner--Executor is the Pareto-optimal ``sweet spot'': $\sim$90\% cheaper than the all-commercial baseline while retaining $\sim$80\% of its accuracy.}
+\label{fig:phase2_pareto}
+\end{figure}
+
+To validate that the self-hosted Executor can sustain agentic traffic, the Phase~1 Locust harness was extended with an agent workload (\texttt{locustfile\_agent.py}, \texttt{agent\_load\_test.json}) that drives the agent API end-to-end through the vLLM Executor. The serving layer handled this concurrent agentic load using the same FP8 KV configuration validated in Phase~1, closing the loop between the two phases: the optimization measured in Phase~1 is exactly what makes the Phase~2 Executor economically viable.
+
 % ============================================================
 \chapter{CONCLUSION}
 % ============================================================
 
 \section{Summary of Findings}
 
-This project has produced the following primary findings from a systematic benchmarking campaign of vLLM on NVIDIA L4 GPUs:
+This project produced the following primary findings from a two-phase study: a systematic serving-optimization benchmarking campaign for vLLM on NVIDIA L4 GPUs (Phase~1), and a GAIA evaluation of a hybrid Planner--Executor agent built on the optimized serving layer (Phase~2):
 
 \textbf{Finding 1: FP8 quantization is the clear recommendation for production LLM serving.} It reduces TTFT P50 by 28--30\%, TPOT P50 by 3--35\%, and E2E P50 by 6--35\% relative to FP16, while causing less than 2.4\% quality degradation on ARC-Challenge, MMLU, and GSM8K. The cost per million output tokens drops from \$1.67 to \$1.46 at 16 users and from \$0.68 to \$0.47 at 64 users.
 
@@ -749,6 +1041,14 @@ This project has produced the following primary findings from a systematic bench
 \textbf{Finding 7: Prefix caching provides up to 55\% TTFT reduction for shared-prefix workloads.} At 8 concurrent users with a shared system prompt, enabling prefix caching reduces TTFT P50 by 53.7--55.7\%. The benefit is negligible at u=1 (cold cache) and grows with concurrency. This makes prefix caching essential for production chatbot deployments where a system prompt is repeated in every request.
 
 \textbf{Finding 8: KV cache is not a bottleneck for 7B models on 24 GB GPUs.} KV cache utilization peaked at 5.4\% across all tested configurations. Parameters like \texttt{gpu-memory-utilization} have no measurable effect in this regime. This would change significantly with larger models or longer context windows.
+
+\textbf{Finding 9: An FP8 KV cache is the most impactful high-concurrency lever.} On Qwen3-8B, switching from the default cache to an FP8 KV cache cut TTFT at u64 from 30~seconds to 405~ms, tripled throughput at u128 (313 $\to$ 901 tok/s), and lowered cost by 65\% (\$1.40 $\to$ \$0.49/M)---all with no measurable quality loss. FP8 KV became the default configuration for the rest of the project.
+
+\textbf{Finding 10: Aggressive KV-cache compression (TurboQuant) does not pay off on the L4.} Across five presets up to 3-bit keys+values, VRAM savings were negligible ($\sim$400~MiB of 20.6~GiB), throughput fell at every concurrency level, and TPOT regressed by 28--106\%, while quality stayed within $\pm$2.5~pp. The only advantage was faster first-token admit-time under saturation. The technique would likely help on larger models or hardware with cheaper dequant paths, but FP8 KV remains the best operating point here.
+
+\textbf{Finding 11: Model choice is a real trade-off.} Qwen3-8B offers far higher peak throughput (3{,}599 tok/s, \$0.12/M) and decisively higher quality than Gemma~4 E4B, while Gemma~4 is dramatically more stable under extreme concurrency (525~ms TTFT at u128 vs.\ Qwen3's 36~s). The right choice depends on whether the workload prioritizes throughput and quality or tail-latency stability.
+
+\textbf{Finding 12: The hybrid Planner--Executor agent is the Pareto-optimal architecture.} On GAIA Level~1, pairing a commercial Planner (Gemini~3 Flash) with a self-hosted Gemma~4 Executor achieved 67.9\% accuracy---$\sim$80\% of the all-commercial ceiling (84.9\%)---at \$0.0110 per question, about one-tenth of the all-commercial cost. Planning quality must be bought from the frontier model; execution can be cheaply self-hosted. A fully self-hosted two-model agent (\texttt{small-planner-executor}) regressed to 39.6\%, showing that a weak planner is worse than none.
 
 \section{Practical Recommendations}
 
@@ -769,7 +1069,13 @@ Best quality/latency/cost balance & FP8 --- Pareto-optimal across all benchmarks
 \hline
 Chatbot with system prompts & Enable prefix caching (up to 55\% TTFT reduction) \\
 \hline
-Avoid & BitsAndBytes --- 2$\times$ slower, no quality advantage \\
+High-concurrency serving & Enable FP8 KV cache (up to 3$\times$ throughput, no quality loss) \\
+\hline
+Tail-latency-critical workload & Gemma~4 (sub-600~ms TTFT even at u=128) \\
+\hline
+Cost-efficient agent & Hybrid Planner--Executor (commercial Planner + self-hosted Executor) \\
+\hline
+Avoid & BitsAndBytes; TurboQuant on L4; a fully self-hosted two-model agent \\
 \hline
 \end{tabular}
 \label{table:recommendations}
@@ -784,17 +1090,19 @@ Avoid & BitsAndBytes --- 2$\times$ slower, no quality advantage \\
     \item Requests are single-turn; multi-turn conversations create different KV cache reuse patterns.
     \item The custom prompt dataset (37 prompts) is small and may not fully represent production workload diversity.
     \item BitsAndBytes testing was limited to u=16; u=64 data was not available due to infrastructure issues.
+    \item The Phase~2 agent was evaluated only on GAIA Level~1 (53 questions); Levels~2 and~3 and larger sample sizes would tighten the accuracy estimates and stress harder multi-hop reasoning.
+    \item Phase~2 cost figures depend on an imputed price for self-hosted tokens derived from Phase~1 throughput; the absolute cost ratio would shift with a different GPU rate or utilization assumption.
 \end{enumerate}
 
 \section{Future Work}
 
 \begin{enumerate}
+    \item \textbf{Dynamic task routing}: Implement a lightweight router that sends simple queries directly to the self-hosted Executor, bypassing the Planner API entirely to further reduce cost while reserving the commercial Planner for genuinely complex tasks.
+    \item \textbf{Executor fine-tuning}: Distill the Planner's reasoning patterns and tool-use traces into the local Executor (Gemma~4) to close the accuracy gap between the hybrid and the all-commercial agent.
+    \item \textbf{Hardware scaling}: Re-run the aggressive KV-cache compression (TurboQuant) and FP8 experiments on newer GPUs (H100/H200), where native FP8/INT4 acceleration should eliminate the dequantization compute bottleneck observed on the L4.
     \item Extend the experiment matrix to speculative decoding, which can further reduce TPOT by using a small draft model to propose tokens verified by the main model in batch.
-    \item Benchmark on H100 GPUs, where FP8 has native hardware acceleration, to quantify the additional gain over L4.
-    \item Evaluate multi-GPU tensor parallelism (TP=2, TP=4) and its effect on latency and throughput.
-    \item Study longer context workloads (8K--128K tokens) where KV cache management becomes the dominant bottleneck.
-    \item Integrate the benchmarking pipeline with the MLCommons MLPerf Inference suite for standardized cross-system comparison.
-    \item Extend the quality evaluation to include MT-Bench and LiveBench for more realistic assessment of reasoning and instruction-following quality under quantization.
+    \item Evaluate multi-GPU tensor parallelism (TP=2, TP=4) and longer context workloads (8K--128K tokens), where KV cache management becomes the dominant bottleneck and KV compression may finally pay off.
+    \item Broaden the agent evaluation to GAIA Levels~2 and~3 and additional agent benchmarks, and integrate the serving pipeline with the MLCommons MLPerf Inference suite for standardized cross-system comparison.
 \end{enumerate}
 
 \bibliographystyle{plain}
@@ -886,6 +1194,45 @@ non\_reasoning\_bitsandbytes & Qwen2.5-7B & \texttt{--quantization bitsandbytes}
 \end{tabular}
 \end{table}
 
+\section{KV Cache and TurboQuant Experiments (Qwen3-8B)}
+
+\begin{table}[h!]
+\caption{KV-cache precision experiment configurations (Qwen3-8B).}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Name} & \textbf{\texttt{--kv-cache-dtype}} & \textbf{Concurrency} \\
+\hline
+kv\_cache\_auto & auto (16-bit) & 16, 32, 64, 128 \\
+kv\_cache\_fp8 & fp8 & 16, 32, 64, 128 \\
+turboquant\_k8v4 & turboquant\_k8v4 & 32, 64, 128 \\
+turboquant\_4bit\_nc & turboquant\_4bit\_nc & 32, 64, 128 \\
+turboquant\_k3v4\_nc & turboquant\_k3v4\_nc & 64, 128 \\
+turboquant\_3bit\_nc & turboquant\_3bit\_nc & 32, 64, 128 \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Agent Configurations (Phase 2)}
+
+\begin{table}[h!]
+\caption{Phase~2 agent configurations evaluated on GAIA Level~1.}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{\texttt{MODE}} & \textbf{Planner} & \textbf{Executor} \\
+\hline
+large-planner-executor & Gemini~3 Flash & Gemini~3 Flash \\
+planner-executor (hybrid) & Gemini~3 Flash & Gemma~4 26B (AWQ, vLLM) \\
+planner-only & Gemini~3 Flash & --- \\
+single-agent & --- & Gemma~4 26B (AWQ, vLLM) \\
+small-planner-executor & Gemma~4 26B & Gemma~4 26B (AWQ, vLLM) \\
+\hline
+\end{tabular}
+\end{table}
+
+The self-hosted Executor model is \texttt{cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit}, served by vLLM with an FP8 KV cache. The commercial Planner is \texttt{gemini-3-flash-preview} via Vertex AI. Tools run in \texttt{real} mode for GAIA evaluation (live web search, scraping, document parsing, and E2B-sandboxed Python execution).
+
 \chapter{DATASET DESCRIPTIONS}
 
 \section{Custom Prompt Dataset}
@@ -922,5 +1269,9 @@ The prefix caching dataset (\texttt{prefix\_dataset.json}) contains 20 prompts a
     \item \textbf{MMLU} (5-shot): 14{,}042 questions across 57 subjects spanning STEM, humanities, social sciences, and professional domains. Metric: accuracy.
     \item \textbf{GSM8K} (5-shot): 1{,}319 grade school math word problems. Metric: exact match (strict). Limited to 1{,}000 samples per evaluation run.
 \end{itemize}
+
+\section{GAIA Benchmark (Phase~2)}
+
+The Phase~2 agent is evaluated on the \textbf{GAIA} validation set~\cite{gaia}, a benchmark of real-world questions for general AI assistants that require multi-step tool use (web search, file download and parsing, and code execution) to answer. This project uses the \textbf{Level~1} split (53 questions), the least difficult tier, which already demands correct tool orchestration. Answers are graded by an exact-match scorer that normalizes case, whitespace, numbers, and currency/unit symbols. Access to the dataset is gated on HuggingFace and requires authentication.
 
 \end{document}
