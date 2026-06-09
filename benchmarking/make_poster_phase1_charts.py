@@ -90,7 +90,7 @@ def figure1_fp8_throughput():
     ttft_fp8_64 = float(fp8[fp8.users == 64]["ttft_mean"].iloc[0])
     ttft_factor = ttft_default_64 / ttft_fp8_64
 
-    fig, ax = plt.subplots(figsize=(9.2, 6.0))
+    fig, ax = plt.subplots(figsize=(10.0, 6.2))
 
     ax.plot(users, y_default, "-o", color=BASE, lw=3.2, ms=11,
             markerfacecolor="white", markeredgecolor=BASE, markeredgewidth=2.6,
@@ -103,22 +103,23 @@ def figure1_fp8_throughput():
     ax.fill_between(users, y_default, y_fp8, where=(y_fp8 >= y_default),
                     color=WIN, alpha=0.10, zorder=1)
 
-    # End-point value labels
+    # End-point value labels (offset right so they don't sit on the line)
     ax.annotate(f"{y_fp8[-1]:.0f}", (users[-1], y_fp8[-1]),
-                textcoords="offset points", xytext=(10, 4),
+                textcoords="offset points", xytext=(14, 6),
                 fontsize=14, fontweight="bold", color=WIN)
     ax.annotate(f"{y_default[-1]:.0f}", (users[-1], y_default[-1]),
-                textcoords="offset points", xytext=(10, -14),
+                textcoords="offset points", xytext=(14, -16),
                 fontsize=14, fontweight="bold", color=MUTED)
 
-    # Peak-gain bracket
-    ax.annotate(
+    # Peak-gain label -- sits inside the shaded gap between the two curves
+    mid_x = (users[2] + users[3]) / 2          # midpoint between 64 and 128
+    mid_y = (np.interp(mid_x, users, y_fp8) +
+             np.interp(mid_x, users, y_default)) / 2
+    ax.text(
+        mid_x, mid_y,
         f"+{peak_gain:.0f}% throughput\nat peak load",
-        xy=(users[-1], (y_fp8[-1] + y_default[-1]) / 2),
-        xytext=(users[-1] - 46, (y_fp8[-1] + y_default[-1]) / 2 - 8),
-        fontsize=14.5, fontweight="bold", color=WIN, ha="center", va="center",
-        arrowprops=dict(arrowstyle="-|>", color=WIN, lw=2.2,
-                        connectionstyle="arc3,rad=-0.15"),
+        fontsize=14.5, fontweight="bold", color=WIN,
+        ha="center", va="center",
     )
 
     ax.set_xlabel("Concurrent users (active requests)", fontsize=15.5,
@@ -126,13 +127,13 @@ def figure1_fp8_throughput():
     ax.set_ylabel("Output throughput  (tokens / s)", fontsize=15.5,
                   fontweight="semibold", labelpad=8)
     ax.set_title("FP8 KV Cache: More Throughput as Load Grows — For Free",
-                 fontsize=18.5, fontweight="bold", pad=42, loc="left")
-    ax.text(0, 1.045, "Qwen3-8B · single NVIDIA L4 · accuracy unchanged "
-                      "(ARC / GSM8K / MMLU within <1%)",
+                 fontsize=18.5, fontweight="bold", pad=44, loc="left")
+    ax.text(0, 1.05, "Qwen3-8B · single NVIDIA L4 · accuracy unchanged "
+                     "(ARC / GSM8K / MMLU within <1%)",
             transform=ax.transAxes, fontsize=13, color=MUTED)
 
     ax.set_xticks(users)
-    ax.set_xlim(users.min() - 6, users.max() + 18)
+    ax.set_xlim(users.min() - 8, users.max() + 26)
     ax.set_ylim(0, max(y_fp8) * 1.22)
     ax.grid(True, color=GRID, lw=1.0, zorder=0)
     ax.set_axisbelow(True)
@@ -193,24 +194,25 @@ def figure2_turboquant_limit():
     colors = np.where(is_base, WIN, LOSS)
 
     x = np.arange(len(df))
-    fig, ax = plt.subplots(figsize=(9.2, 6.0))
+    fig, ax = plt.subplots(figsize=(10.5, 6.2))
 
-    bars = ax.bar(x, df["rel_tp"], width=0.66, color=colors,
+    bars = ax.bar(x, df["rel_tp"], width=0.62, color=colors,
                   edgecolor="white", linewidth=1.5, zorder=3)
 
     # 100% reference line (FP8)
     ax.axhline(100, color=WIN, lw=1.6, ls=(0, (5, 4)), zorder=2)
-    ax.text(len(df) - 0.45, 102.5, "FP8 baseline = 100%",
-            color=WIN, fontsize=12.5, fontweight="bold", ha="right", va="bottom")
 
     # Bar labels: relative throughput + quality (GSM8K) to show quality is flat
     for xi, (_, row) in zip(x, df.iterrows()):
         rel = row["rel_tp"]
-        ax.text(xi, rel + 2.0, f"{rel:.0f}%", ha="center", va="bottom",
+        # Percentage label above the bar
+        ax.text(xi, rel + 2.5, f"{rel:.0f}%", ha="center", va="bottom",
                 fontsize=14, fontweight="bold",
                 color=WIN if row["experiment"] == "qwen3_kv_fp8_baseline" else LOSS)
-        ax.text(xi, 4, f"GSM8K\n{row['gsm8k_flex']*100:.1f}%", ha="center",
-                va="bottom", fontsize=11, color="white", fontweight="semibold")
+        # GSM8K quality inside the bar -- adaptive y to keep inside short bars
+        gsm_y = min(rel * 0.08, 6)   # push label up a bit from bottom
+        ax.text(xi, gsm_y, f"GSM8K\n{row['gsm8k_flex']*100:.1f}%", ha="center",
+                va="bottom", fontsize=10.5, color="white", fontweight="semibold")
 
     worst = df["rel_tp"].min()
     ax.set_ylabel("Throughput @ 128 users\n(% of FP8 baseline)", fontsize=15.5,
@@ -223,7 +225,7 @@ def figure2_turboquant_limit():
             transform=ax.transAxes, fontsize=13, color=MUTED)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(df["label"], fontsize=13.5)
+    ax.set_xticklabels(df["label"], fontsize=12.5)
     ax.set_ylim(0, 118)
     ax.set_yticks([0, 25, 50, 75, 100])
     ax.grid(True, axis="y", color=GRID, lw=1.0, zorder=0)
@@ -231,9 +233,9 @@ def figure2_turboquant_limit():
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
 
-    # Takeaway callout
+    # Takeaway callout -- positioned upper-center-right, clear of bars
     ax.text(
-        0.975, 0.93,
+        0.97, 0.88,
         f"Aggressive KV compression keeps only\n"
         f"{worst:.0f}–{df[~is_base]['rel_tp'].max():.0f}% of FP8 throughput\n"
         f"— with no accuracy gain to show for it.",
