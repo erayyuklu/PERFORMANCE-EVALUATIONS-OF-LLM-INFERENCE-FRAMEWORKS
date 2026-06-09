@@ -90,11 +90,6 @@ def figure1_fp8_throughput():
     # Peak-load throughput gain
     peak_gain = (y_fp8[-1] / y_default[-1] - 1) * 100
 
-    # TTFT collapse at 64 concurrent users (mean)
-    ttft_default_64 = float(default[default.users == 64]["ttft_mean"].iloc[0])
-    ttft_fp8_64 = float(fp8[fp8.users == 64]["ttft_mean"].iloc[0])
-    ttft_factor = ttft_default_64 / ttft_fp8_64
-
     fig, ax = plt.subplots(figsize=(10.0, 6.2))
 
     ax.plot(users, y_default, "-o", color=BASE, lw=3.2, ms=11,
@@ -150,24 +145,11 @@ def figure1_fp8_throughput():
     leg.get_frame().set_edgecolor(GRID)
     leg.get_frame().set_facecolor("white")
 
-    # Killer-stat callout box
-    box_txt = (f"Time-to-First-Token @ 64 users\n"
-               f"{ttft_default_64/1000:.1f} s  →  {ttft_fp8_64/1000:.2f} s"
-               f"   ({ttft_factor:.0f}× faster)")
-    ax.text(
-        0.975, 0.06, box_txt, transform=ax.transAxes,
-        fontsize=13.5, fontweight="bold", color=ACCENT, ha="right", va="bottom",
-        bbox=dict(boxstyle="round,pad=0.7", facecolor="#eef3fc",
-                  edgecolor=ACCENT, linewidth=1.6),
-    )
-
     fig.tight_layout()
     _save(fig, "phase1_fig1_fp8_kv_throughput")
     plt.close(fig)
 
-    print(f"  [fig1] peak gain +{peak_gain:.1f}% | "
-          f"TTFT@64 {ttft_default_64:.0f}ms -> {ttft_fp8_64:.0f}ms "
-          f"({ttft_factor:.1f}x)")
+    print(f"  [fig1] peak throughput gain +{peak_gain:.1f}%")
 
 
 # --------------------------------------------------------------------------- #
@@ -303,10 +285,109 @@ def figure2_kv_precision_sweetspot():
           f"  | worst {worst / fp8_tpot:.2f}x FP8")
 
 
+# --------------------------------------------------------------------------- #
+# FIGURE 3 -- Time-to-first-token (responsiveness) under load
+# --------------------------------------------------------------------------- #
+def _median_ttft(run, exp, users):
+    """Median time-to-first-token (ms) from raw per-request metrics.
+
+    Some early runs wrote a stray private-use char (\\uf00d) between the user
+    count and '_custom_metrics', so we match the file with a tolerant regex.
+    """
+    folder = RESULTS / run / exp
+    pat = re.compile(rf"^{re.escape(exp)}__u{users}\D.*custom_metrics\.csv$")
+    files = [f for f in folder.glob(f"{exp}__u{users}*custom_metrics.csv")
+             if pat.match(f.name)]
+    if not files:
+        raise FileNotFoundError(f"{exp} u{users} custom_metrics not found")
+    df = pd.read_csv(files[0])
+    if "success" in df.columns:
+        df = df[df["success"] == True]
+    return float(df["ttft_ms"].median())
+
+
+def figure3_ttft_latency():
+    RUN = "run_20260405_005704"   # FP16 (auto) and FP8 measured back-to-back
+
+    users = np.array([16, 32, 64, 128])
+    ttft_fp16 = np.array([_median_ttft(RUN, "qwen3_kv_cache_auto", u)
+                          for u in users]) / 1000.0
+    ttft_fp8 = np.array([_median_ttft(RUN, "qwen3_kv_cache_fp8", u)
+                         for u in users]) / 1000.0
+
+    i64 = int(np.where(users == 64)[0][0])
+    factor_64 = ttft_fp16[i64] / ttft_fp8[i64]
+
+    fig, ax = plt.subplots(figsize=(10.0, 6.2))
+
+    ax.plot(users, ttft_fp16, "-o", color=LOSS, lw=3.6, ms=12,
+            markerfacecolor=LOSS, markeredgecolor="white", markeredgewidth=1.8,
+            label="Default FP16 KV cache", zorder=4)
+    ax.plot(users, ttft_fp8, "-o", color=WIN, lw=3.6, ms=12,
+            markerfacecolor=WIN, markeredgecolor="white", markeredgewidth=1.8,
+            label="FP8 KV cache  (recommended)", zorder=5)
+
+    ax.fill_between(users, ttft_fp8, ttft_fp16, where=(ttft_fp16 >= ttft_fp8),
+                    color=LOSS, alpha=0.08, zorder=1)
+
+    # Value labels at the two high-load points
+    for xi, hi in ((users[2], ttft_fp16[2]), (users[3], ttft_fp16[3])):
+        ax.annotate(f"{hi:.0f} s", (xi, hi), textcoords="offset points",
+                    xytext=(8, 6), fontsize=13.5, fontweight="bold", color=LOSS)
+    ax.annotate(f"{ttft_fp8[3]:.0f} s", (users[3], ttft_fp8[3]),
+                textcoords="offset points", xytext=(8, -18),
+                fontsize=13, fontweight="bold", color=WIN)
+
+    # The "latency wall" callout at u64
+    ax.annotate(
+        f"FP16 stalls: {ttft_fp16[i64]:.0f} s wait\nFP8 stays at "
+        f"{ttft_fp8[i64]:.1f} s\n({factor_64:.0f}\u00d7 faster)",
+        xy=(users[i64], ttft_fp16[i64]),
+        xytext=(users[i64] - 30, ttft_fp16[i64] + 42),
+        fontsize=13.5, fontweight="bold", color=ACCENT, ha="left", va="center",
+        arrowprops=dict(arrowstyle="-|>", color=ACCENT, lw=2.2,
+                        connectionstyle="arc3,rad=-0.2"),
+        bbox=dict(boxstyle="round,pad=0.6", facecolor="#eef3fc",
+                  edgecolor=ACCENT, linewidth=1.5),
+    )
+
+    ax.set_xlabel("Concurrent users (active requests)", fontsize=15.5,
+                  fontweight="semibold", labelpad=8)
+    ax.set_ylabel("Time to first token  (seconds)", fontsize=15.5,
+                  fontweight="semibold", labelpad=8)
+    ax.set_title("FP8 KV Cache Keeps the Server Responsive Under Load",
+                 fontsize=18, fontweight="bold", pad=44, loc="left")
+    ax.text(0, 1.05,
+            "Qwen3-8B \u00b7 single NVIDIA L4 \u00b7 median time-to-first-token \u00b7 "
+            "FP16 fills GPU memory and collapses into queueing",
+            transform=ax.transAxes, fontsize=12.5, color=MUTED)
+
+    ax.set_xticks(users)
+    ax.set_xlim(users.min() - 8, users.max() + 16)
+    ax.set_ylim(-6, ttft_fp16.max() * 1.16)
+    ax.grid(True, color=GRID, lw=1.0, zorder=0)
+    ax.set_axisbelow(True)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+
+    leg = ax.legend(loc="upper left", frameon=True, fontsize=13.5,
+                    handlelength=2.2, borderpad=0.8)
+    leg.get_frame().set_edgecolor(GRID)
+    leg.get_frame().set_facecolor("white")
+
+    fig.tight_layout()
+    _save(fig, "phase1_fig3_ttft_latency")
+    plt.close(fig)
+
+    print(f"  [fig3] TTFT median (s) FP16={np.round(ttft_fp16,1).tolist()} "
+          f"FP8={np.round(ttft_fp8,1).tolist()} | @64 {factor_64:.0f}x faster")
+
+
 def main():
     print("Generating poster Phase-1 figures ->", OUTDIR)
     figure1_fp8_throughput()
     figure2_kv_precision_sweetspot()
+    figure3_ttft_latency()
     print("Done.")
 
 
