@@ -70,7 +70,7 @@ plt.rcParams.update({
 
 def _save(fig, stem):
     for ext in ("png", "svg"):
-        fig.savefig(OUTDIR / f"{stem}.{ext}", dpi=300, bbox_inches="tight")
+        fig.savefig(OUTDIR / f"{stem}.{ext}", dpi=300, bbox_inches="tight", pad_inches=0.15)
     print(f"  saved {OUTDIR / (stem + '.png')}")
 
 
@@ -200,7 +200,7 @@ def figure2_kv_precision_sweetspot():
     worst = tpot.max()
 
     x = np.arange(len(spectrum))
-    fig, ax = plt.subplots(figsize=(13.5, 6.4))
+    fig, ax = plt.subplots(figsize=(11.5, 6.4))
 
     bars = ax.bar(x, tpot, width=0.58, color=colors,
                   edgecolor="white", linewidth=1.6, zorder=3)
@@ -233,13 +233,13 @@ def figure2_kv_precision_sweetspot():
     ax.set_title("FP8 Is the KV-Cache Sweet Spot",
                  fontsize=18.5, fontweight="bold", pad=42, loc="left")
     ax.text(0, 1.045,
-            "Qwen3-8B · FP16 wastes memory bandwidth · TurboQuant wastes compute "
-            "on dequantization · accuracy ~88% GSM8K throughout",
+            "Qwen3-8B \u00b7 FP16 wastes bandwidth \u00b7 TurboQuant wastes compute \u00b7 "
+            "accuracy ~88% GSM8K throughout",
             transform=ax.transAxes, fontsize=12.5, color=MUTED)
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=12)
-    ax.set_ylim(0, worst * 1.35)
+    ax.set_ylim(0, worst * 1.50)
     ax.grid(True, axis="y", color=GRID, lw=1.0, zorder=0)
     ax.set_axisbelow(True)
     for s in ("top", "right"):
@@ -268,14 +268,14 @@ def figure2_kv_precision_sweetspot():
               f"FP8  {fp8_tp:.0f} tok/s   vs   FP16  {fp16_tp:.0f} tok/s\n"
               f"(+{(fp8_tp / fp16_tp - 1) * 100:.0f}% with FP8)")
     ax.text(
-        1.02, 0.58, tp_txt, transform=ax.transAxes,
-        fontsize=11.5, fontweight="bold", color=ACCENT, ha="left", va="center",
+        0.5, -0.22, tp_txt, transform=ax.transAxes,
+        fontsize=12, fontweight="bold", color=ACCENT, ha="center", va="top",
         bbox=dict(boxstyle="round,pad=0.7", facecolor="#eef3fc",
                   edgecolor=ACCENT, linewidth=1.6),
     )
 
     fig.tight_layout()
-    fig.subplots_adjust(right=0.74)
+    fig.subplots_adjust(bottom=0.22, right=0.95)
     _save(fig, "phase1_fig2_kv_precision_sweetspot")
     plt.close(fig)
 
@@ -318,7 +318,7 @@ def figure3_ttft_latency():
     i64 = int(np.where(users == 64)[0][0])
     factor_64 = ttft_fp16[i64] / ttft_fp8[i64]
 
-    fig, ax = plt.subplots(figsize=(10.0, 6.2))
+    fig, ax = plt.subplots(figsize=(10.0, 3.4))
 
     ax.plot(users, ttft_fp16, "-o", color=LOSS, lw=3.6, ms=12,
             markerfacecolor=LOSS, markeredgecolor="white", markeredgewidth=1.8,
@@ -330,36 +330,37 @@ def figure3_ttft_latency():
     ax.fill_between(users, ttft_fp8, ttft_fp16, where=(ttft_fp16 >= ttft_fp8),
                     color=LOSS, alpha=0.08, zorder=1)
 
-    # Value labels at the two high-load points
-    for xi, hi in ((users[2], ttft_fp16[2]), (users[3], ttft_fp16[3])):
-        ax.annotate(f"{hi:.0f} s", (xi, hi), textcoords="offset points",
-                    xytext=(8, 6), fontsize=13.5, fontweight="bold", color=LOSS)
+    # "30 s" label -- offset to the right so it doesn't collide with the arrow
+    ax.annotate(f"{ttft_fp16[2]:.0f} s", (users[2], ttft_fp16[2]),
+                textcoords="offset points", xytext=(-42, 12),
+                fontsize=13.5, fontweight="bold", color=LOSS)
+    ax.annotate(f"{ttft_fp16[3]:.0f} s", (users[3], ttft_fp16[3]),
+                textcoords="offset points", xytext=(8, 6),
+                fontsize=13.5, fontweight="bold", color=LOSS)
     ax.annotate(f"{ttft_fp8[3]:.0f} s", (users[3], ttft_fp8[3]),
                 textcoords="offset points", xytext=(8, -18),
                 fontsize=13, fontweight="bold", color=WIN)
 
-    # The "latency wall" callout at u64
-    ax.annotate(
-        f"FP16 stalls: {ttft_fp16[i64]:.0f} s wait\nFP8 stays at "
-        f"{ttft_fp8[i64]:.1f} s\n({factor_64:.0f}\u00d7 faster)",
-        xy=(users[i64], ttft_fp16[i64]),
-        xytext=(users[i64] - 30, ttft_fp16[i64] + 42),
+    # The "latency wall" callout for u64, moved to the right of the plot
+    ax.text(
+        1.04, 0.4,
+        f"At 64 users:\nFP16 stalls: {ttft_fp16[i64]:.0f} s wait\n"
+        f"FP8 stays at {ttft_fp8[i64]:.1f} s\n({factor_64:.0f}\u00d7 faster)",
+        transform=ax.transAxes,
         fontsize=13.5, fontweight="bold", color=ACCENT, ha="left", va="center",
-        arrowprops=dict(arrowstyle="-|>", color=ACCENT, lw=2.2,
-                        connectionstyle="arc3,rad=-0.2"),
         bbox=dict(boxstyle="round,pad=0.6", facecolor="#eef3fc",
                   edgecolor=ACCENT, linewidth=1.5),
     )
 
     ax.set_xlabel("Concurrent users (active requests)", fontsize=15.5,
                   fontweight="semibold", labelpad=8)
-    ax.set_ylabel("Time to first token  (seconds)", fontsize=15.5,
+    ax.set_ylabel("TTFT  (seconds)", fontsize=15.5,
                   fontweight="semibold", labelpad=8)
     ax.set_title("FP8 KV Cache Keeps the Server Responsive Under Load",
                  fontsize=18, fontweight="bold", pad=44, loc="left")
     ax.text(0, 1.05,
-            "Qwen3-8B \u00b7 single NVIDIA L4 \u00b7 median time-to-first-token \u00b7 "
-            "FP16 fills GPU memory and collapses into queueing",
+            "Qwen3-8B \u00b7 single NVIDIA L4 \u00b7 median TTFT \u00b7 "
+            "FP16 collapses into queueing at high load",
             transform=ax.transAxes, fontsize=12.5, color=MUTED)
 
     ax.set_xticks(users)
@@ -370,12 +371,13 @@ def figure3_ttft_latency():
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
 
-    leg = ax.legend(loc="upper left", frameon=True, fontsize=13.5,
-                    handlelength=2.2, borderpad=0.8)
+    leg = ax.legend(loc="upper left", frameon=True, fontsize=12.0,
+                    handlelength=1.8, borderpad=0.6, labelspacing=0.4)
     leg.get_frame().set_edgecolor(GRID)
     leg.get_frame().set_facecolor("white")
 
     fig.tight_layout()
+    fig.subplots_adjust(right=0.74)
     _save(fig, "phase1_fig3_ttft_latency")
     plt.close(fig)
 
