@@ -20,7 +20,14 @@
 \fancyhf{}
 \fancyhead[R]{\thepage}
 \renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{
+  \fancyhf{}
+  \fancyhead[R]{\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
 \renewcommand{\labelenumi}{(\roman{enumi})}
+
+\usepackage[hidelinks]{hyperref}
 
 \graphicspath{%
   {figures/}%
@@ -48,8 +55,11 @@
 {\large \textbf{Eray Y\"{u}kl\"{u}}}\\[0.2cm]
 {\large \textbf{S\"{u}leyman Tolga Acar}}\\[2cm]
 {\large Advisor:}\\[0.2cm]
-{\large \textbf{Bahri Atay \"{O}zg\"{o}vde}}\\[3cm]
-{\large 2026}
+{\large \textbf{Bahri Atay \"{O}zg\"{o}vde}}
+
+\vfill
+{\large 2026}\\[0.5cm]
+\url{https://github.com/erayyuklu/PERFORMANCE-EVALUATIONS-OF-LLM-INFERENCE-FRAMEWORKS}
 \end{center}
 \end{titlepage}
 \pagenumbering{roman}
